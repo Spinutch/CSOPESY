@@ -1,13 +1,15 @@
-**HOW TO RUN THIS PROJECT**
+**HOW TO RUN EMULATOR**
 
-**a. Installations:**
-     brew install glfw pkg-config
-     brew install cmake
-    **Verify Installation** 
-    pkg-config --cflags --libs glfw3
-    cmake --version
+**a. Installations**
+1. brew install glfw pkg-config
+2. brew install cmake
+[Adjust installations according to your OS]
 
-**b. Ensure Project Structure** (click edit nalang to show actual format)
+**b. Verify Installation** 
+1. pkg-config --cflags --libs glfw3
+2. cmake --version
+
+**c. Ensure Project Structure**
 
 CSOPESY/               <-- Project Root Folder
 ├── CMakeLists.txt     <-- Master Build Blueprint
@@ -23,15 +25,15 @@ CSOPESY/               <-- Project Root Folder
 │       └── imgui_impl_opengl3.cpp
 └── build/             # Dedicated Workspace for Output Binaries (Keep Empty initially)
         
-**c. Compile Command**
-    cd downloads (or wherever CSOPESY project is in)
-    cd CSOPESY
-    cd build
-    cmake ..
-    cmake --build .
-    ./emulator
+**d. Compile Command**
+1. cd downloads (or whereever CSOPESY project folder is in)
+2. cd CSOPESY
+3. cd build
+4. cmake ..
+5. cmake --build .
+6. ./emulator
 
-resetting cache:
+**e. resetting cache (optional)**
 rm -rf *
 cmake ..
 cmake --build .
