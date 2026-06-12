@@ -7,8 +7,7 @@ void PowerButton::Render(GLFWwindow* window, const ImVec2& screen_min_p, const I
     
     // Position cursor at bottom-left corner offset by margins
     ImGui::SetCursorScreenPos(ImVec2(screen_min_p.x + margin, screen_max_p.y - btn_height - margin));
-    
-    // Modern operating system style palette (soft red highlight structure)
+
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.75f, 0.15f, 0.15f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.90f, 0.22f, 0.22f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.55f, 0.05f, 0.05f, 1.0f));

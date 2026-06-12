@@ -12,7 +12,7 @@ int main() {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // Essential framework configuration tag for MacOS Retinas
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // for mac
 
     GLFWwindow* window = glfwCreateWindow(1280, 720, "CSOPESY Desktop Workspace Environment Mockup", nullptr, nullptr);
     if (!window) { glfwTerminate(); return 1; }
@@ -26,7 +26,6 @@ int main() {
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 150");
 
-    // Instantiation of OOP Compositor object logic
     Desktop osDesktop;
 
     while (!glfwWindowShouldClose(window)) {

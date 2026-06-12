@@ -13,14 +13,14 @@ void Desktop::DrawWallpaper(const ImVec2& min_p, const ImVec2& max_p) {
 }
 
 void Desktop::Render(GLFWwindow* window) {
-    // 1. Fetch the main viewport geometry configurations
+    // Fetch the main viewport geometry configurations
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     
     // make the upcoming window to match the exact working size of the GLFW window
     ImGui::SetNextWindowPos(viewport->WorkPos);
     ImGui::SetNextWindowSize(viewport->WorkSize);
 
-    // 2. Setup flags to lock the window layer down and strip UI decorations
+    // Setup flags to lock the window layer down and strip UI decorations
     ImGuiWindowFlags desktop_flags = 0;
     desktop_flags |= ImGuiWindowFlags_NoTitleBar;
     desktop_flags |= ImGuiWindowFlags_NoResize;
@@ -36,15 +36,15 @@ void Desktop::Render(GLFWwindow* window) {
     ImGui::Begin("DesktopCompositorShell", nullptr, desktop_flags);
     ImGui::PopStyleVar();
 
-    // 3. Map out coordinate coordinates for relative sub-component placement
+    // Map out coordinate coordinates for relative sub-component placement
     ImVec2 min_p = viewport->WorkPos;
     ImVec2 max_p = ImVec2(viewport->WorkPos.x + viewport->WorkSize.x, viewport->WorkPos.y + viewport->WorkSize.y);
     float layout_margin = 24.0f;
 
-    // 4. Composition Execution order (Wallpaper -> Clock -> Power Button)
+    // Composition Execution order (Wallpaper -> Clock -> Power Button)
     DrawWallpaper(min_p, max_p);
     
-    // Render child objects via composition
+    // Render objects via composition
     m_Clock.Render(ImVec2(max_p.x, min_p.y), layout_margin);
     m_PowerButton.Render(window, min_p, max_p, layout_margin);
 

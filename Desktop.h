@@ -14,7 +14,6 @@ private:
 public:
     Desktop() = default;
     ~Desktop() = default;
-
-    // Orchestrates background execution layout configurations across sub-classes
+    
     void Render(GLFWwindow* window);
 };
