@@ -5,7 +5,7 @@
     **Verify Installation** 
     pkg-config --cflags --libs glfw3
 
-**b. Ensure Project Structure**
+**b. Ensure Project Structure** (click edit nalang to show actual format)
 
 CSOPESY/
 ├── main.cpp            # Main initialization and engine loop
