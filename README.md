@@ -6,6 +6,7 @@
     pkg-config --cflags --libs glfw3
 
 **b. Ensure Project Structure**
+
 CSOPESY/
 ├── main.cpp            # Main initialization and engine loop
 ├── Desktop.h / .cpp    # OS Desktop Compositor layer (manages background & widgets)
