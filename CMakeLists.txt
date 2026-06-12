@@ -4,7 +4,7 @@ project(CSOPESY_Emulator CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(GLFW REQUIRED glfw3)
+pkg_check_modules(GLFW REQUIRED IMPORTED_TARGET glfw3)
 
 # Automatically collect all local source files (.cpp) in the root folder
 file(GLOB SOURCES "*.cpp")
@@ -27,7 +27,7 @@ target_include_directories(emulator PRIVATE
 )
 
 target_link_libraries(emulator PRIVATE
-    ${GLFW_LIBRARIES}
+    PkgConfig::GLFW
     "-framework OpenGL"
     "-framework Cocoa"
     "-framework IOKit"

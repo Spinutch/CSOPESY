@@ -4,16 +4,22 @@ struct GLFWwindow;
 #include "Clock.h"
 #include "PowerButton.h"
 
-class Desktop {
+class Desktop
+{
 private:
-    Clock       m_Clock;
+    Clock m_Clock;
     PowerButton m_PowerButton;
 
-    void DrawWallpaper(const ImVec2& min_p, const ImVec2& max_p);
+    unsigned int m_WallpaperTexture = 0;
+    int m_WallpaperWidth = 0;
+    int m_WallpaperHeight = 0;
+
+    void DrawWallpaper(const ImVec2 &min_p, const ImVec2 &max_p);
+    bool LoadTextureFromFile(const char *filename, unsigned int *out_texture, int *out_width, int *out_height);
 
 public:
-    Desktop() = default;
-    ~Desktop() = default;
-    
-    void Render(GLFWwindow* window);
+    Desktop();
+    ~Desktop();
+
+    void Render(GLFWwindow *window);
 };
