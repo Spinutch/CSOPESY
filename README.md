@@ -39,6 +39,6 @@ CSOPESY/                   # Project Root Folder
 6. ./emulator
 
 **e. resetting cache (optional)**
-rm -rf *
-cmake ..
-cmake --build .
+1. rm -rf
+2. cmake ..
+3. cmake --build .
