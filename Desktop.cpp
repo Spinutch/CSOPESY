@@ -101,10 +101,122 @@ void Desktop::Render(GLFWwindow *window)
 
     // Composition Execution order (Wallpaper -> Clock -> Power Button)
     DrawWallpaper(min_p, max_p);
-
     m_Clock.Render(ImVec2(max_p.x, min_p.y), layout_margin);
-    // render power button
-    m_PowerButton.Render(window, min_p, max_p, layout_margin);
 
+    RenderTaskbar(window, min_p, max_p);
+
+    ImGui::End();
+
+    // so they can be dragged around and focused freely
+    if (m_ShowPlaceholder1) RenderPlaceholder1();
+    if (m_ShowPlaceholder2) RenderPlaceholder2();
+    if (m_ShowTaskManager)  RenderTaskManager();
+}
+
+void Desktop::RenderTaskbar(GLFWwindow *window, const ImVec2 &min_p, const ImVec2 &max_p)
+{
+    float taskbarHeight = 48.0f;
+
+    ImGui::SetNextWindowPos(ImVec2(min_p.x, max_p.y - taskbarHeight));
+    ImGui::SetNextWindowSize(ImVec2(max_p.x - min_p.x, taskbarHeight));
+
+    ImGuiWindowFlags taskbar_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
+                                     ImGuiWindowFlags_NoScrollbar;
+
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.10f, 0.10f, 0.12f, 0.95f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 10.0f));
+
+    ImGui::Begin("TaskbarPanel", nullptr, taskbar_flags);
+
+    // --- Left-Aligned Taskbar Actions ---
+    if (ImGui::Button("INIT", ImVec2(60, 28))) { m_ShowPlaceholder1 = !m_ShowPlaceholder1; }
+    ImGui::SameLine();
+
+    if (ImGui::Button("SRCH", ImVec2(60, 28))) { m_ShowPlaceholder2 = !m_ShowPlaceholder2; }
+    ImGui::SameLine();
+
+    if (ImGui::Button("TaskMgr", ImVec2(100, 28))) { m_ShowTaskManager = !m_ShowTaskManager; }
+
+    // --- Right-Aligned Power Button ---
+    // We pass the taskbar coordinates, and our updated PowerButton handles the rest!
+    ImVec2 taskbarMin = ImVec2(min_p.x, max_p.y - taskbarHeight);
+    ImVec2 taskbarMax = max_p;
+
+    // 6.0f margin keeps it looking perfectly centered vertically within the 48px bar
+    m_PowerButton.Render(window, taskbarMin, taskbarMax, 6.0f);
+
+    ImGui::End();
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor();
+}
+
+void Desktop::RenderPlaceholder1()
+{
+    ImGui::SetNextWindowSize(ImVec2(300, 200), ImGuiCond_FirstUseEver);
+    if (ImGui::Begin("System Initialization Settings", &m_ShowPlaceholder1))
+    {
+        ImGui::Text("Welcome to OperatingOS v1.0 Initialization");
+        ImGui::Separator();
+        ImGui::Text("Kernel State: Online");
+        ImGui::Text("Subsystems loaded successfully.");
+    }
+    ImGui::End();
+}
+
+void Desktop::RenderPlaceholder2()
+{
+    ImGui::SetNextWindowSize(ImVec2(350, 220), ImGuiCond_FirstUseEver);
+    if (ImGui::Begin("File Search Indexer", &m_ShowPlaceholder2))
+    {
+        ImGui::Text("Search Directory: /root/system32/");
+        static char searchBuffer[128] = "";
+        ImGui::InputText("Query", searchBuffer, IM_ARRAYSIZE(searchBuffer));
+        if (ImGui::Button("Index Assets")) {
+            // Placeholder trigger action
+        }
+    }
+    ImGui::End();
+}
+
+// --- Component 3: The Task Manager ---
+void Desktop::RenderTaskManager()
+{
+    ImGui::SetNextWindowSize(ImVec2(450, 300), ImGuiCond_FirstUseEver);
+
+    // Passing &m_ShowTaskManager allows the standard window 'X' close button to work natively
+    if (ImGui::Begin("Task Manager", &m_ShowTaskManager))
+    {
+        ImGui::Text("Performance Metrics System Process List:");
+        ImGui::Separator();
+
+        // Construct table with 3 distinct columns
+        if (ImGui::BeginTable("ProcessTable", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
+        {
+            ImGui::TableSetupColumn("Process Name");
+            ImGui::TableSetupColumn("CPU Usage");
+            ImGui::TableSetupColumn("Memory Allocation");
+            ImGui::TableHeadersRow();
+
+            // Row 1: System Compositor Shell
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0); ImGui::Text("DesktopCompositorShell");
+            ImGui::TableSetColumnIndex(1); ImGui::Text("1.2 %%");
+            ImGui::TableSetColumnIndex(2); ImGui::Text("14,240 KB");
+
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0); ImGui::Text("TomodachiLife.exe");
+            ImGui::TableSetColumnIndex(1); ImGui::Text("42.7 %%");
+            ImGui::TableSetColumnIndex(2); ImGui::Text("245,680 KB");
+
+            // Row 3: OS Idle Runtime
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0); ImGui::Text("System Idle Process");
+            ImGui::TableSetColumnIndex(1); ImGui::Text("56.1 %%");
+            ImGui::TableSetColumnIndex(2); ImGui::Text("16 KB");
+
+            ImGui::EndTable();
+        }
+    }
     ImGui::End();
 }

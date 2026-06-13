@@ -26,10 +26,8 @@ target_include_directories(emulator PRIVATE
     ${GLFW_INCLUDE_DIRS}
 )
 
-target_link_libraries(emulator PRIVATE
-    PkgConfig::GLFW
-    "-framework OpenGL"
-    "-framework Cocoa"
-    "-framework IOKit"
-    "-framework CoreVideo"
-)
+if(APPLE)
+    target_link_libraries(emulator PRIVATE glfw "-framework Cocoa" "-framework OpenGL" "-framework IOKit" "-framework CoreVideo")
+else()
+    target_link_libraries(emulator PRIVATE glfw GL dl pthread)
+endif()
