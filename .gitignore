@@ -1,0 +1,45 @@
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# ==========================================
+# CSOPESY Specific Ignores
+# ==========================================
+
+# Ignore the entire build directory and everything inside it
+build/
+
+# Ignore local VS Code settings/caches
+.vscode/
+
+# Ignore macOS system files
+.DS_Store
