@@ -1,4 +1,11 @@
 #include "Clock.h"
+
+// Initialize the global atomic clock counter to 0 at application startup
+std::atomic<uint64_t> g_cpuTick{0};
+
+
+/*
+#include "Clock.h"
 #include <chrono>
 #include <ctime>
 #include <iomanip>
@@ -22,4 +29,4 @@ void Clock::Render(const ImVec2& screen_max_p, float margin) {
     
     ImGui::SetCursorScreenPos(text_pos);
     ImGui::TextColored(ImVec4(0.95f, 0.95f, 0.95f, 1.0f), "%s", clock_text.c_str());
-}
+} */
