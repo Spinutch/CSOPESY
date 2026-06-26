@@ -1,36 +1,50 @@
 ===========================================================================
-CSOPESY OS Emulator & Process Scheduler - Infrastructure Environment Build
+CSOPESY OS Emulator & Process Scheduler - Process Multiplexer Workspace
 ===========================================================================
-Author: GROUP 6 
+Entry Point File: main.cpp
 
-Files Configured:
- - config.h     : Application configuration metadata structure contracts.
- - config.cpp   : Space-delimited dynamic string clamping parser engine.
- - clock.cpp    : Atomic global ticking thread heartbeat counter object.
- - main.cpp     : Core micro-kernel module execution orchestrator.
- - config.txt   : Initial environment deployment parameters properties.
-
----------------------------------------------------------------------------
-1. FULL SYSTEM EMULATOR COMPILATION COMMAND
----------------------------------------------------------------------------
-To compile the entire combined workspace project files into a unified executable target, execute the following command syntax from your console environment terminal context:
-
-g++ -std=c++17 -pthread main.cpp console.cpp system_ui.cpp util.cpp scheduler.cpp process.cpp interpreter.cpp config.cpp clock.cpp -o csopesy
+Group Members:
+ - Heather Soper      (Member 4 - Integration, Configuration & Heartbeat)
+ - [Groupmate 1]     (Member 1 - Shell & System UI)
+ - [Groupmate 2]     (Member 2 - Scheduler Engine)
+ - [Groupmate 3]     (Member 3 - Process, Interpreter & UI)
 
 ---------------------------------------------------------------------------
-2. INDEPENDENT HARNESS DEVELOPMENT OR TEST BUILDS
+1. APPLICATION OVERVIEW
 ---------------------------------------------------------------------------
-To isolate verify build features separately during validation checkpoints without missing linker dependencies:
-
-A. Test Build Verification via Member 2 Scheduler Harness:
-g++ -std=c++17 -pthread scheduler.cpp config.cpp clock.cpp main_2.cpp -o test2
-
-B. Test Build Verification via Member 3 Process Interpreter Engine:
-g++ -std=c++17 -pthread process.cpp interpreter.cpp config.cpp clock.cpp main_3.cpp -o test3
+This application is a 100% pure Console/CLI-based OS Emulator and Multi-threaded Process Scheduler built using C++17. It features a space-separated configuration loader, automated boundary clamping, a background thread execution engine supporting FCFS and Round Robin scheduling, and a global atomic cycle heartbeat clock.
 
 ---------------------------------------------------------------------------
-3. RUNNING SYSTEM INSTRUCTIONS
+2. SYSTEM COMPILATION INSTRUCTIONS
 ---------------------------------------------------------------------------
-Ensure "config.txt" resides directly adjacent inside the runtime workspace folder context profile.
-Execute Binary:
-./csopesy
+// UPDATE 10:52 PM 
+// curernt progress compile command: g++ -std=c++17 main.cpp Config.cpp Clock.cpp -o csopesy
+// ./csopesy
+*Note: As other team members finish their modules, this command will expand 
+to include their files (e.g., console.cpp, scheduler.cpp, process.cpp, etc.).
+
+To compile the entire combined workspace codebase into a single unified 
+production executable target, run the following command in your terminal:
+
+g++ -std=c++17 -pthread main.cpp console.cpp system_ui.cpp util.cpp scheduler.cpp process.cpp interpreter.cpp Config.cpp Clock.cpp -o csopesy
+
+---------------------------------------------------------------------------
+3. INDEPENDENT HARNESS/TEST BUILDS
+---------------------------------------------------------------------------
+To verify individual modules separately during checkpoint testing loops without hitting linker dependency conflicts:
+
+A. Scheduler Validation Harness:
+g++ -std=c++17 -pthread scheduler.cpp Config.cpp Clock.cpp main_2.cpp -o test2
+
+B. Process/Interpreter Validation Harness:
+g++ -std=c++17 -pthread process.cpp interpreter.cpp Config.cpp Clock.cpp main_3.cpp -o test3
+
+---------------------------------------------------------------------------
+4. RUNNING & EXECUTION INSTRUCTIONS
+---------------------------------------------------------------------------
+1. Ensure that the "config.txt" properties file is placed in the exact same workspace directory as your compiled binary.
+2. Launch the terminal application:
+   ./csopesy
+3. Inside the emulator interface prompt, you MUST call the initialization gate sequence before any other operations can be utilized:
+   root:\> initialize
+4. Following initialization, standard commands such as 'screen -ls', 'scheduler-start', and 'report-util' will become fully unlocked and operational. Use 'exit' to terminate.
