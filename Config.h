@@ -1,20 +1,22 @@
 #ifndef CSOPESY_EMULATOR_CONFIG_H
 #define CSOPESY_EMULATOR_CONFIG_H
-#include <cstdint>
-
-#endif //CSOPESY_EMULATOR_CONFIG_H
 
 #pragma once
 #include <string>
+#include <cstdint>
 
 struct Config {
-    int numCPU = 4;
-    std::string scheduler = "rr";
-    uint32_t quantumCycles = 5;
-    uint32_t batchProcessFreq = 1;
-    uint32_t minIns = 1000;
-    uint32_t maxIns = 2000;
-    uint32_t delayPerExec = 0;
+    int numCPU = 4;                     // Range: [1, 128]
+    std::string scheduler = "rr";       // "fcfs" or "rr"
+    uint64_t quantumCycles = 5;         // Range: [1, 2^32]
+    uint64_t batchProcessFreq = 1;      // Range: [1, 2^32]
+    uint64_t minIns = 1000;             // Range: [1, 2^32]
+    uint64_t maxIns = 2000;             // Range: [1, 2^32]
+    uint64_t delayPerExec = 0;          // Range: [0, 2^32]
+
+    bool initialized = false;           // Crucial for M1's command gating
 
     bool loadFromFile(const std::string& fileName);
 };
+
+#endif // CSOPESY_EMULATOR_CONFIG_H
