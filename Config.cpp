@@ -3,7 +3,7 @@
 #include <sstream>
 
 bool Config::loadFromFile(const std::string& fileName) {
-    std::ifstream ifs(fileName);
+    std::ifstream file(fileName);
     if (!ifs.is_open()) return false;
 
     std::string key;
