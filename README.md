@@ -2,7 +2,7 @@
 
 **a. Installations**
 1. brew install glfw pkg-config
-2. brew install cmake
+2. brew install cmake  
 [Adjust installations according to your OS]
 
 **b. Verify Installation** 
@@ -10,7 +10,7 @@
 2. cmake --version
 
 **c. Ensure Project Structure**
-
+```text
 CSOPESY/               <-- Project Root Folder
 ├── CMakeLists.txt     <-- Master Build Blueprint
 ├── main.cpp            # Engine Lifecycle Loop
@@ -24,7 +24,8 @@ CSOPESY/               <-- Project Root Folder
 │       ├── imgui_impl_glfw.cpp
 │       └── imgui_impl_opengl3.cpp
 └── build/             # Dedicated Workspace for Output Binaries (Keep Empty initially)
-        
+```
+
 **d. Compile Command**
 1. cd downloads (or whereever CSOPESY project folder is in)
 2. cd CSOPESY
@@ -34,6 +35,6 @@ CSOPESY/               <-- Project Root Folder
 6. ./emulator
 
 **e. resetting cache (optional)**
-rm -rf *
-cmake ..
-cmake --build .
+1. rm -rf *
+2. cmake ..
+3. cmake --build .
