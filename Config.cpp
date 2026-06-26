@@ -4,7 +4,7 @@
 
 bool Config::loadFromFile(const std::string& fileName) {
     std::ifstream file(fileName);
-    if (!ifs.is_open()) return false;
+    if (!file.is_open()) return false;
 
     std::string key;
     while (file >> key) {
