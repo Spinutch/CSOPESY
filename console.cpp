@@ -5,6 +5,7 @@
 //       routing to renderSystemStatus / renderProcessSmi / sched API.
 // ============================================================================
 #include "mo1.h"
+#include "scheduler.h"
 #include <iostream>
 #include <fstream>
 #include <sstream>
