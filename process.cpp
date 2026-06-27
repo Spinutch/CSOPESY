@@ -89,5 +89,19 @@ ProcView viewOf(const Process& p)
     v.executedCommands = p.executedCommands;
     v.creationTimestamp = p.creationTimestamp;
     v.coreId = p.coreId;
+
+    // Copy recent logs (thread-safe)
+    const size_t maxLines = 50;
+    if (p.logMutex) {
+        std::lock_guard<std::mutex> lk(*p.logMutex);
+        size_t start = (p.logs.size() > maxLines) ? (p.logs.size() - maxLines) : 0;
+        for (size_t i = start; i < p.logs.size(); ++i)
+            v.logs.push_back(p.logs[i]);
+    } else {
+        size_t start = (p.logs.size() > maxLines) ? (p.logs.size() - maxLines) : 0;
+        for (size_t i = start; i < p.logs.size(); ++i)
+            v.logs.push_back(p.logs[i]);
+    }
+
     return v;
 }

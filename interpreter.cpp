@@ -25,18 +25,32 @@ StepResult stepProcess(Process &p, int coreId, uint64_t tick) {
 
     switch (ins.type) {
     case InstructionType::PRINT: {
-        std::ostringstream oss;
-        // Base message
-        if (!ins.msg.empty()) oss << ins.msg;
-        // Append src1 if present
-        if (ins.src1IsVar) oss << p.readVar(ins.src1);
-        else if (!ins.src1.empty()) oss << ins.src1Val;
-        // Append src2 if present
-        if (ins.src2IsVar) oss << p.readVar(ins.src2);
-        else if (!ins.src2.empty()) oss << ins.src2Val;
+        // Support placeholders in msg like "Value: {x}" which will be replaced
+        // with the current variable values. If no placeholders, append src fields.
+        std::string outMsg;
+        const std::string &s = ins.msg;
+        for (size_t i = 0; i < s.size(); ++i) {
+            if (s[i] == '{') {
+                size_t j = s.find('}', i+1);
+                if (j != std::string::npos) {
+                    std::string var = s.substr(i+1, j - (i+1));
+                    uint16_t val = p.readVar(var);
+                    outMsg += std::to_string(val);
+                    i = j;
+                    continue;
+                }
+            }
+            outMsg.push_back(s[i]);
+        }
+        // If no placeholders and src1/src2 provided, append them
+        if (s.find('{') == std::string::npos) {
+            if (ins.src1IsVar) outMsg += std::to_string(p.readVar(ins.src1));
+            else if (!ins.src1.empty()) outMsg += std::to_string(ins.src1Val);
+            if (ins.src2IsVar) outMsg += std::to_string(p.readVar(ins.src2));
+            else if (!ins.src2.empty()) outMsg += std::to_string(ins.src2Val);
+        }
 
-        std::string msg = oss.str();
-        p.appendLog(coreId, msg);
+        p.appendLog(coreId, outMsg);
         p.executedCommands++;
         return StepResult{StepResult::RAN, 0};
     }

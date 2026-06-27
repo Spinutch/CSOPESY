@@ -559,6 +559,19 @@ SchedulerSnapshot Scheduler::getSnapshot()
         v.creationTimestamp = cp.proc.creationTimestamp;
         v.coreId = cp.proc.coreId;
 
+        // Copy recent logs into ProcView
+        const size_t maxLines = 50;
+        if (cp.proc.logMutex) {
+            std::lock_guard<std::mutex> lk(*cp.proc.logMutex);
+            size_t start = (cp.proc.logs.size() > maxLines) ? (cp.proc.logs.size() - maxLines) : 0;
+            for (size_t i = start; i < cp.proc.logs.size(); ++i)
+                v.logs.push_back(cp.proc.logs[i]);
+        } else {
+            size_t start = (cp.proc.logs.size() > maxLines) ? (cp.proc.logs.size() - maxLines) : 0;
+            for (size_t i = start; i < cp.proc.logs.size(); ++i)
+                v.logs.push_back(cp.proc.logs[i]);
+        }
+
         if (cp.proc.state == ProcessState::FINISHED)
         {
             snap.finished.push_back(v);

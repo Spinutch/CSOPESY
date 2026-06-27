@@ -68,6 +68,9 @@ struct ProcView {
     int          executedCommands;
     std::string  creationTimestamp;
     int          coreId;
+
+    // Recent logs (M3 provides these)
+    std::vector<std::string> logs;
 };
 
 struct SchedulerSnapshot {
