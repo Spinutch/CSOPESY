@@ -236,6 +236,15 @@ void runConsole(SchedT &sched, Config &cfg)
             continue;
         }
 
+        // Spawn a single batch process on demand
+        if (line == "spawn-batch")
+        {
+            std::cout << "[console] >> Routing: 'spawn-batch' → sched.createBatchProcess()\n";
+            std::string name = sched.createBatchProcess();
+            std::cout << "[console] Spawned batch process '" << name << "'\n";
+            continue;
+        }
+
         // ---- scheduler-stop ----
         if (line == "scheduler-stop")
         {

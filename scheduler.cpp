@@ -31,38 +31,26 @@
 #include <algorithm>
 #include <cstdint>
 #include "Clock.h"
+#include "Process.h"
+#include "interpreter.h"
 
 // ---------------------------------------------------------------------------
 // Internal process record (richer than the public Process struct)
 // ---------------------------------------------------------------------------
 struct CoreProcess
 {
-    // --- Public Process fields (mirrored for snapshot) ---
-    int id;
-    std::string name;
-    ProcessState state;
-    int totalCommands;
-    int executedCommands;
-    std::string creationTimestamp;
-    int coreId; // -1 = not on a core
+    // The rich Process owned by M3 (instructions, vars, logs, etc.)
+    Process proc;
 
     // --- Scheduler internals ---
-    uint64_t ticksOnCore;    // ticks spent on current core burst
-    uint64_t sleepUntilTick; // for SLEEP instruction (M3 sets this)
-    bool sleeping;
+    uint64_t ticksOnCore = 0;    // ticks spent on current core burst
+    uint64_t sleepUntilTick = 0; // for SLEEP instruction (M3 sets this)
+    bool sleeping = false;
 
     // Converts to the public Process view (for M1 / M3 calls)
     Process toProcess() const
     {
-        Process p;
-        p.id = id;
-        p.name = name;
-        p.state = state;
-        p.totalCommands = totalCommands;
-        p.executedCommands = executedCommands;
-        p.creationTimestamp = creationTimestamp;
-        p.coreId = coreId;
-        return p;
+        return proc; // Process is copyable (logs use shared_ptr mutex)
     }
 };
 
@@ -79,6 +67,7 @@ struct SchedulerImpl
     uint64_t minIns = 10;
     uint64_t maxIns = 100;
     uint64_t delayPerExec = 0;
+    bool seedProcesses = false; // if true, seed every process with x,y,z and fixed FOR program
 
     // --- Process store ---
     std::mutex storeMu;
@@ -137,18 +126,107 @@ struct SchedulerImpl
     {
         std::lock_guard<std::mutex> lk(storeMu);
         CoreProcess cp;
-        cp.id = nextId++;
-        cp.name = name;
-        cp.state = ProcessState::READY;
-        cp.totalCommands = totalCmds;
-        cp.executedCommands = 0;
-        cp.creationTimestamp = nowTimestamp();
-        cp.coreId = -1;
+        cp.proc.id = nextId++;
+        cp.proc.name = name;
+        cp.proc.state = ProcessState::READY;
+        cp.proc.totalCommands = totalCmds;
+        cp.proc.executedCommands = 0;
+        cp.proc.creationTimestamp = nowTimestamp();
+        cp.proc.coreId = -1;
         cp.ticksOnCore = 0;
         cp.sleepUntilTick = 0;
         cp.sleeping = false;
+
+        // Populate instructions
+        cp.proc.instructions.clear();
+
+        bool treatAsBatch = (!name.empty() && name[0] == 'p') && !seedProcesses;
+        if (treatAsBatch) {
+            // Batch process: generate a linear program with totalCmds instructions
+            // Start with DECLARE x 0
+            Instruction decl;
+            decl.type = InstructionType::DECLARE;
+            decl.varName = "x";
+            decl.varValue = 0;
+            cp.proc.instructions.push_back(decl);
+
+            // Fill remaining instructions alternating ADD and PRINT
+            int remaining = std::max(0, totalCmds - 1);
+            for (int i = 0; i < remaining; ++i) {
+                if ((i % 2) == 0) {
+                    Instruction add;
+                    add.type = InstructionType::ADD;
+                    add.dest = "x";
+                    add.src1 = "x";
+                    add.src1IsVar = true;
+                    add.src2IsVar = false;
+                    add.src2Val = 1;
+                    cp.proc.instructions.push_back(add);
+                } else {
+                    Instruction pr;
+                    pr.type = InstructionType::PRINT;
+                    pr.msg = "Batch value: ";
+                    pr.src1IsVar = true;
+                    pr.src1 = "x";
+                    cp.proc.instructions.push_back(pr);
+                }
+            }
+        } else {
+            // Seed every process with x,y,z=0 and a FOR loop of 100 reps
+            // Seed DECLARE x,y,z
+            for (const auto &v : {"x", "y", "z"}) {
+                Instruction d;
+                d.type = InstructionType::DECLARE;
+                d.varName = v;
+                d.varValue = 0;
+                cp.proc.instructions.push_back(d);
+                // Initialize variable table as well
+                cp.proc.writeVar(v, 0);
+            }
+
+            // Build FOR body: [ADD x,x,1 ; PRINT "Value from: " + x]
+            Instruction add;
+            add.type = InstructionType::ADD;
+            add.dest = "x";
+            add.src1 = "x";
+            add.src1IsVar = true;
+            add.src2IsVar = false;
+            add.src2Val = 1;
+
+            Instruction pr;
+            pr.type = InstructionType::PRINT;
+            pr.msg = "Value from: ";
+            pr.src1IsVar = true;
+            pr.src1 = "x";
+
+            Instruction forIns;
+            forIns.type = InstructionType::FOR;
+            forIns.repeatCount = 100;
+            forIns.forBody = {add, pr};
+
+            cp.proc.instructions.push_back(forIns);
+
+            // Update totalCommands to the flattened count (3 declares + 2*100)
+            cp.proc.totalCommands = static_cast<int>(3 + 2 * forIns.repeatCount);
+        }
+
+        // Ensure flatten cache is invalidated
+        cp.proc.invalidateFlatten();
+
         processMap[name] = cp;
         readyQueue.push_back(name);
+
+        processMap[name] = cp;
+        readyQueue.push_back(name);
+    }
+
+    // Create a single batch process and return its generated name
+    std::string createBatchProcess()
+    {
+        std::string name = makeBatchName();
+        int cmds = randomInstructionCount();
+        enqueue(name, cmds);
+        return name;
     }
 
     // -----------------------------------------------------------------------
@@ -170,8 +248,8 @@ struct SchedulerImpl
                     if (cp.sleeping && tick >= cp.sleepUntilTick)
                     {
                         cp.sleeping = false;
-                        cp.state = ProcessState::READY;
-                        cp.coreId = -1;
+                        cp.proc.state = ProcessState::READY;
+                        cp.proc.coreId = -1;
                         readyQueue.push_back(name);
                         // std::cout << "[Scheduler] Process '" << name
                         //          << "' woke at tick " << tick << "\n";
@@ -194,13 +272,13 @@ struct SchedulerImpl
                         continue; // stale entry
 
                     CoreProcess &cp = it->second;
-                    if (cp.state == ProcessState::FINISHED)
+                    if (cp.proc.state == ProcessState::FINISHED)
                         continue;
                     if (cp.sleeping)
                         continue;
 
-                    cp.state = ProcessState::RUNNING;
-                    cp.coreId = c;
+                    cp.proc.state = ProcessState::RUNNING;
+                    cp.proc.coreId = c;
                     cp.ticksOnCore = 0;
                     coreSlots[c] = pname;
 
@@ -263,20 +341,18 @@ struct SchedulerImpl
                         break;
 
                     CoreProcess &cp = it->second;
-                    execDone = cp.executedCommands;
-                    totalCmds = cp.totalCommands;
-                    isFinished = (cp.state == ProcessState::FINISHED);
+                    execDone = cp.proc.executedCommands;
+                    totalCmds = cp.proc.totalCommands;
+                    isFinished = (cp.proc.state == ProcessState::FINISHED);
                     isSleeping = cp.sleeping;
                     ticksOnCore = cp.ticksOnCore;
-                    procName = cp.name;
+                    procName = cp.proc.name;
                 }
 
                 if (isFinished || isSleeping)
                     break;
 
                 // ---- Execute one "instruction" ----
-                // M3 replaces this with a real stepProcess() call.
-                // Stub: just increment executedCommands.
                 {
                     std::lock_guard<std::mutex> lk(storeMu);
                     auto it = processMap.find(pname);
@@ -284,18 +360,34 @@ struct SchedulerImpl
                         break;
                     CoreProcess &cp = it->second;
 
-                    cp.executedCommands++;
-                    cp.ticksOnCore++;
+                    // Call M3 interpreter to perform one step
+                    StepResult res = stepProcess(cp.proc, coreId, curTick);
 
-                    // Check finished
-                    if (cp.executedCommands >= cp.totalCommands)
-                    {
-                        cp.state = ProcessState::FINISHED;
-                        cp.coreId = -1;
+                    if (res.type == StepResult::RAN) {
+                        cp.ticksOnCore++;
+                        // If process completed as a result of this instruction
+                        if (cp.proc.executedCommands >= cp.proc.totalCommands) {
+                            cp.proc.state = ProcessState::FINISHED;
+                            cp.proc.coreId = -1;
+                            coreSlots[coreId] = "";
+                            workerReady[coreId].store(true);
+                            goto next_dispatch;
+                        }
+                    }
+                    else if (res.type == StepResult::SLEEPING) {
+                        // Put process to sleep until tick + sleepTicks
+                        cp.sleeping = true;
+                        cp.sleepUntilTick = curTick + res.sleepTicks;
+                        cp.proc.state = ProcessState::READY;
+                        cp.proc.coreId = -1;
                         coreSlots[coreId] = "";
-                        // std::cout << "[Core " << coreId << "] '"
-                        //         << pname << "' FINISHED at tick "
-                        //       << curTick << "\n";
+                        workerReady[coreId].store(true);
+                        goto next_dispatch;
+                    }
+                    else if (res.type == StepResult::FINISHED) {
+                        cp.proc.state = ProcessState::FINISHED;
+                        cp.proc.coreId = -1;
+                        coreSlots[coreId] = "";
                         workerReady[coreId].store(true);
                         goto next_dispatch;
                     }
@@ -330,10 +422,10 @@ struct SchedulerImpl
                     if (it != processMap.end())
                     {
                         CoreProcess &cp = it->second;
-                        if (cp.state == ProcessState::RUNNING)
+                        if (cp.proc.state == ProcessState::RUNNING)
                         {
-                            cp.state = ProcessState::READY;
-                            cp.coreId = -1;
+                            cp.proc.state = ProcessState::READY;
+                            cp.proc.coreId = -1;
                             cp.ticksOnCore = 0;
                             coreSlots[coreId] = "";
                             readyQueue.push_back(pname); // requeue at tail
@@ -406,7 +498,7 @@ void Scheduler::start(const Config &cfg)
     I.minIns = cfg.minIns;
     I.maxIns = cfg.maxIns;
     I.delayPerExec = cfg.delayPerExec;
-
+    I.seedProcesses = cfg.seedProcesses;
     // Size per-core arrays (atomic/mutex/cv are not copyable; use unique_ptr arrays)
     I.coreSlots.assign(cfg.numCPU, "");
     I.workerReady = std::make_unique<std::atomic<bool>[]>(cfg.numCPU);
@@ -459,22 +551,35 @@ SchedulerSnapshot Scheduler::getSnapshot()
     for (auto &[name, cp] : I.processMap)
     {
         ProcView v;
-        v.id = cp.id;
-        v.name = cp.name;
-        v.state = cp.state;
-        v.totalCommands = cp.totalCommands;
-        v.executedCommands = cp.executedCommands;
-        v.creationTimestamp = cp.creationTimestamp;
-        v.coreId = cp.coreId;
+        v.id = cp.proc.id;
+        v.name = cp.proc.name;
+        v.state = cp.proc.state;
+        v.totalCommands = cp.proc.totalCommands;
+        v.executedCommands = cp.proc.executedCommands;
+        v.creationTimestamp = cp.proc.creationTimestamp;
+        v.coreId = cp.proc.coreId;
 
-        if (cp.state == ProcessState::FINISHED)
+        // Copy recent logs into ProcView
+        const size_t maxLines = 50;
+        if (cp.proc.logMutex) {
+            std::lock_guard<std::mutex> lk(*cp.proc.logMutex);
+            size_t start = (cp.proc.logs.size() > maxLines) ? (cp.proc.logs.size() - maxLines) : 0;
+            for (size_t i = start; i < cp.proc.logs.size(); ++i)
+                v.logs.push_back(cp.proc.logs[i]);
+        } else {
+            size_t start = (cp.proc.logs.size() > maxLines) ? (cp.proc.logs.size() - maxLines) : 0;
+            for (size_t i = start; i < cp.proc.logs.size(); ++i)
+                v.logs.push_back(cp.proc.logs[i]);
+        }
+
+        if (cp.proc.state == ProcessState::FINISHED)
         {
             snap.finished.push_back(v);
         }
         else
         {
             snap.running.push_back(v);
-            if (cp.coreId >= 0)
+            if (cp.proc.coreId >= 0)
                 ++snap.usedCores;
         }
     }
@@ -517,6 +622,14 @@ void Scheduler::createNamedProcess(const std::string &name, const Config &cfg)
     I.enqueue(name, cmds);
     std::cout << "[Scheduler] Created named process '" << name
               << "' with " << cmds << " instructions.\n";
+}
+
+std::string Scheduler::createBatchProcess()
+{
+    auto &I = *impl_;
+    std::string name = I.createBatchProcess();
+    std::cout << "[Scheduler] Created batch process '" << name << "'.\n";
+    return name;
 }
 
 void Scheduler::shutdown()
