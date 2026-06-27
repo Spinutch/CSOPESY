@@ -34,6 +34,8 @@
 #include "Process.h"
 #include "interpreter.h"
 
+using ReadyQueue = std::deque<std::string>;
+
 // ---------------------------------------------------------------------------
 // Internal process record (richer than the public Process struct)
 // ---------------------------------------------------------------------------
@@ -72,7 +74,7 @@ struct SchedulerImpl
     // --- Process store ---
     std::mutex storeMu;
     std::map<std::string, CoreProcess> processMap; // name → process
-    std::vector<std::string> readyQueue;           // ordered names
+    ReadyQueue readyQueue;                         // ordered names (deque for O(1) pop_front)
     std::vector<std::string> coreSlots;            // index=coreId, value=procName or ""
     int nextId = 1;
     int batchCounter = 0; // for p01, p02…
@@ -265,7 +267,7 @@ struct SchedulerImpl
                         break;
 
                     std::string pname = readyQueue.front();
-                    readyQueue.erase(readyQueue.begin());
+                    readyQueue.pop_front();
 
                     auto it = processMap.find(pname);
                     if (it == processMap.end())
@@ -579,9 +581,13 @@ SchedulerSnapshot Scheduler::getSnapshot()
         else
         {
             snap.running.push_back(v);
-            if (cp.proc.coreId >= 0)
-                ++snap.usedCores;
         }
+    }
+
+    // Recompute usedCores by inspecting workerReady flags (false => core busy)
+    snap.usedCores = 0;
+    for (int i = 0; i < I.numCPU; ++i) {
+        if (!I.workerReady[i].load()) ++snap.usedCores;
     }
     return snap;
 }
