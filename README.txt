@@ -17,11 +17,6 @@ This application is a 100% pure Console/CLI-based OS Emulator and Multi-threaded
 ---------------------------------------------------------------------------
 2. SYSTEM COMPILATION INSTRUCTIONS
 ---------------------------------------------------------------------------
-// UPDATE 10:52 PM 
-// current progress compile command: g++ -std=c++17 main.cpp Config.cpp Clock.cpp -o csopesy
-// ./csopesy
-*Note: As other team members finish their modules, this command will expand 
-to include their files (e.g., console.cpp, scheduler.cpp, process.cpp, etc.).
 
 To compile the entire combined workspace codebase into a single unified 
 production executable target, run the following command in your terminal:
