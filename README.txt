@@ -24,18 +24,7 @@ production executable target, run the following command in your terminal:
 g++ -std=c++17 -pthread main.cpp console.cpp system_ui.cpp util.cpp scheduler.cpp process.cpp interpreter.cpp Config.cpp Clock.cpp -o csopesy
 
 ---------------------------------------------------------------------------
-3. INDEPENDENT HARNESS/TEST BUILDS
----------------------------------------------------------------------------
-To verify individual modules separately during checkpoint testing loops without hitting linker dependency conflicts:
-
-A. Scheduler Validation Harness:
-g++ -std=c++17 -pthread scheduler.cpp Config.cpp Clock.cpp main_2.cpp -o test2
-
-B. Process/Interpreter Validation Harness:
-g++ -std=c++17 -pthread process.cpp interpreter.cpp Config.cpp Clock.cpp main_3.cpp -o test3
-
----------------------------------------------------------------------------
-4. RUNNING & EXECUTION INSTRUCTIONS
+3. RUNNING & EXECUTION INSTRUCTIONS
 ---------------------------------------------------------------------------
 1. Ensure that the "config.txt" properties file is placed in the exact same workspace directory as your compiled binary.
 2. Launch the terminal application:
