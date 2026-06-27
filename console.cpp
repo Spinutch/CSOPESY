@@ -273,6 +273,9 @@ void runConsole(SchedT &sched, Config &cfg)
     }
 }
 
+#include "scheduler.h"
+template void runConsole<Scheduler>(Scheduler&, Config&);
+
 // ---------------------------------------------------------------------------
 // Explicit instantiation for the stub Scheduler in main_1.cpp.
 // M4 will add the real one when integrating.

@@ -117,3 +117,6 @@ void renderProcessSmi(const Process &p, std::ostream &out)
 
     out << DIV << "\n";
 }
+
+#include "scheduler.h"
+template void renderSystemStatus<Scheduler>(Scheduler&, std::ostream&);

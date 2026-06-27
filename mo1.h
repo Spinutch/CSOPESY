@@ -8,12 +8,18 @@
 #include <vector>
 #include <cstdint>
 #include <atomic>
+#include <iostream> 
+#include "process.h"
+#include "Config.h"
+#include "Clock.h"
 
 // ---------------------------------------------------------------------------
 // Forward-declare the two types M1 depends on so this header stays
 // self-contained even before M2/M3 hand over their real headers.
 // ---------------------------------------------------------------------------
 
+
+/* COMMENTED OUT BCS OF DUPLICATE DEFINITION
 // ---- Minimal Config contract (owned by M4, repeated here for M1 stubs) ----
 #ifndef CONFIG_H
 #define CONFIG_H
@@ -30,14 +36,14 @@ struct Config {
 
     bool loadFromFile(const std::string& fileName);
 };
-#endif // CONFIG_H
+#endif // CONFIG_H */
 
-// ---- Minimal Process contract (owned by M3) --------------------------------
+// COMMENTED OUT BCS OF DUPLICATE DEFINITION
+/*  ---- Minimal Process contract (owned by M3) --------------------------------
 #ifndef PROCESS_H
 #define PROCESS_H
 #include <iostream>
 #include <queue>
-enum class ProcessState { READY, RUNNING, FINISHED };
 struct Process {
     int          id;
     std::string  name;
@@ -48,7 +54,7 @@ struct Process {
     std::string  creationTimestamp;
     int          coreId;           // -1 = no core
 };
-#endif // PROCESS_H
+#endif // PROCESS_H */
 
 // ---- Minimal Scheduler contract (owned by M2) ------------------------------
 // M1 only needs the snapshot API. M2 will provide the real implementation.
@@ -63,6 +69,7 @@ struct ProcView {
     std::string  creationTimestamp;
     int          coreId;
 };
+
 struct SchedulerSnapshot {
     std::vector<ProcView> running;
     std::vector<ProcView> finished;
@@ -70,7 +77,7 @@ struct SchedulerSnapshot {
     int totalCores = 0;
 };
 #endif // SCHEDULER_INTERFACE
-
+ProcView viewOf(const Process& p);
 // ---------------------------------------------------------------------------
 // util.cpp
 // ---------------------------------------------------------------------------
