@@ -9,7 +9,7 @@
 #include <cstdint>
 #include <atomic>
 #include <iostream> 
-#include "process.h"
+#include "Process.h"
 #include "Config.h"
 #include "Clock.h"
 

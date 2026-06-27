@@ -94,7 +94,7 @@ void renderSystemStatus(SchedT &sched, std::ostream &out)
 }
 
 // ---------------------------------------------------------------------------
-// renderProcessSmi
+// renderProcessSmi (M3 implementation)
 // ---------------------------------------------------------------------------
 void renderProcessSmi(const Process &p, std::ostream &out)
 {
@@ -102,17 +102,48 @@ void renderProcessSmi(const Process &p, std::ostream &out)
     out << "Process: " << p.name << "  |  PID: " << p.id << "\n";
     out << DIV << "\n";
 
-    if (p.state == ProcessState::FINISHED)
-    {
-        out << "  (No logs buffered in stub; M3 will render print logs here.)\n";
-        out << "\nFinished!\n";
+    // Current instruction line (1-based) and total lines
+    int curLine = 0;
+    if (p.totalCommands <= 0) {
+        curLine = 0;
+    } else if (p.state == ProcessState::FINISHED) {
+        curLine = p.totalCommands;
+    } else {
+        curLine = std::min(p.totalCommands, p.executedCommands + 1);
     }
-    else
-    {
-        out << "  Current instruction : " << p.executedCommands << " / " << p.totalCommands << "\n";
-        out << "  State               : " << stateLabel(p.state) << "\n";
-        out << "  Core                : " << p.coreId << "\n";
-        out << "\n  (Log output rendered by M3's interpreter.)\n";
+
+    out << "  Current instruction : " << curLine << " / " << p.totalCommands << "\n";
+    out << "  State               : " << stateLabel(p.state) << "\n";
+    out << "  Core                : " << p.coreId << "\n";
+    out << "\n";
+
+    // Render recent logs (thread-safe)
+    out << "  Recent logs:\n";
+    const size_t maxLines = 50;
+    if (p.logMutex) {
+        std::lock_guard<std::mutex> lk(*p.logMutex);
+        size_t start = (p.logs.size() > maxLines) ? (p.logs.size() - maxLines) : 0;
+        if (p.logs.empty()) {
+            out << "    (no logs)\n";
+        } else {
+            for (size_t i = start; i < p.logs.size(); ++i) {
+                out << "    " << p.logs[i] << "\n";
+            }
+        }
+    } else {
+        // If no mutex, just print what's available
+        size_t start = (p.logs.size() > maxLines) ? (p.logs.size() - maxLines) : 0;
+        if (p.logs.empty()) {
+            out << "    (no logs)\n";
+        } else {
+            for (size_t i = start; i < p.logs.size(); ++i) {
+                out << "    " << p.logs[i] << "\n";
+            }
+        }
+    }
+
+    if (p.state == ProcessState::FINISHED) {
+        out << "\nFinished!\n";
     }
 
     out << DIV << "\n";

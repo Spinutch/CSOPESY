@@ -28,6 +28,8 @@ public:
     // Process lookup for screen -r / screen -s
     Process* findProcess(const std::string& name);
     void     createNamedProcess(const std::string& name, const Config& cfg);
+    // Create a single batch process (returns generated name)
+    std::string createBatchProcess();
 
     // Clean shutdown (called by M4's main before exit)
     void shutdown();

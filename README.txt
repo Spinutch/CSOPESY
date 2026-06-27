@@ -4,10 +4,10 @@ CSOPESY OS Emulator & Process Scheduler - Process Multiplexer Workspace
 Entry Point File: main.cpp
 
 Group Members:
- - Heather Soper      (Member 4 - Integration, Configuration & Heartbeat)
- - [Groupmate 1]     (Member 1 - Shell & System UI)
- - [Groupmate 2]     (Member 2 - Scheduler Engine)
- - [Groupmate 3]     (Member 3 - Process, Interpreter & UI)
+ - Heather Soper    (Member 4 - Integration, Configuration & Heartbeat)
+ - [Groupmate 1]    (Member 1 - Shell & System UI)
+ - [Groupmate 2]    (Member 2 - Scheduler Engine)
+ - Rai Isidro       (Member 3 - Process, Interpreter & UI)
 
 ---------------------------------------------------------------------------
 1. APPLICATION OVERVIEW
@@ -18,7 +18,7 @@ This application is a 100% pure Console/CLI-based OS Emulator and Multi-threaded
 2. SYSTEM COMPILATION INSTRUCTIONS
 ---------------------------------------------------------------------------
 // UPDATE 10:52 PM 
-// curernt progress compile command: g++ -std=c++17 main.cpp Config.cpp Clock.cpp -o csopesy
+// current progress compile command: g++ -std=c++17 main.cpp Config.cpp Clock.cpp -o csopesy
 // ./csopesy
 *Note: As other team members finish their modules, this command will expand 
 to include their files (e.g., console.cpp, scheduler.cpp, process.cpp, etc.).

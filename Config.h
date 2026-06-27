@@ -15,6 +15,8 @@ struct Config {
     uint64_t delayPerExec = 0;          // Range: [0, 2^32]
 
     bool initialized = false;           // Crucial for M1's command gating
+    // If true, every created process is seeded with x,y,z=0 and the fixed FOR program
+    bool seedProcesses = false;
 
     bool loadFromFile(const std::string& fileName);
 };
