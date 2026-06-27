@@ -33,6 +33,7 @@
 #include "Clock.h"
 #include "Process.h"
 #include "interpreter.h"
+#include <set>
 
 using ReadyQueue = std::deque<std::string>;
 
@@ -70,6 +71,7 @@ struct SchedulerImpl
     uint64_t maxIns = 100;
     uint64_t delayPerExec = 0;
     bool seedProcesses = false; // if true, seed every process with x,y,z and fixed FOR program
+    bool diagLogging = false;   // when true, emit diagnostic logs for dispatch/worker state
 
     // --- Process store ---
     std::mutex storeMu;
@@ -91,6 +93,10 @@ struct SchedulerImpl
     std::unique_ptr<std::atomic<bool>[]> workerReady;
     std::unique_ptr<std::mutex[]> workerMu;
     std::unique_ptr<std::condition_variable[]> workerCv;
+
+    // --- Recent utilization window for smoothing ---
+    std::deque<int> recentUsedCores; // sliding window of used core counts
+    size_t smoothingWindow = 50;     // default window size (ticks)
 
     // RNG for batch generation
     std::mt19937 rng{std::random_device{}()};
@@ -284,12 +290,26 @@ struct SchedulerImpl
                     cp.ticksOnCore = 0;
                     coreSlots[c] = pname;
 
+                    if (diagLogging) {
+                        std::cout << "[Diag] Dispatching '" << pname << "' -> Core " << c << " (readyQueue=" << readyQueue.size() << ")\n";
+                    }
+
                     workerReady[c].store(false);
                     workerCv[c].notify_one(); // wake the worker
                     //    std::cout << "[Scheduler] Dispatched '" << pname
                     //;            << "' → Core " << c
                     //         << " at tick " << tick << "\n";
                 }
+            }
+
+            // Record current used cores into recent window (for smoothing)
+            {
+                int curUsed = 0;
+                for (int i = 0; i < numCPU; ++i) {
+                    if (!workerReady[i].load()) ++curUsed;
+                }
+                recentUsedCores.push_back(curUsed);
+                if (recentUsedCores.size() > smoothingWindow) recentUsedCores.pop_front();
             }
 
             // ~1ms cycle sleep to avoid spinning the CPU
@@ -323,6 +343,7 @@ struct SchedulerImpl
             if (pname.empty())
             {
                 workerReady[coreId].store(true);
+                if (diagLogging) std::cout << "[Diag] Core " << coreId << " found no assignment and set idle\n";
                 continue;
             }
 
@@ -373,6 +394,7 @@ struct SchedulerImpl
                             cp.proc.coreId = -1;
                             coreSlots[coreId] = "";
                             workerReady[coreId].store(true);
+                            if (diagLogging) std::cout << "[Diag] Core " << coreId << " finished process and set idle\n";
                             goto next_dispatch;
                         }
                     }
@@ -384,6 +406,7 @@ struct SchedulerImpl
                         cp.proc.coreId = -1;
                         coreSlots[coreId] = "";
                         workerReady[coreId].store(true);
+                        if (diagLogging) std::cout << "[Diag] Core " << coreId << " put process to sleep and set idle\n";
                         goto next_dispatch;
                     }
                     else if (res.type == StepResult::FINISHED) {
@@ -391,6 +414,7 @@ struct SchedulerImpl
                         cp.proc.coreId = -1;
                         coreSlots[coreId] = "";
                         workerReady[coreId].store(true);
+                        if (diagLogging) std::cout << "[Diag] Core " << coreId << " process FINISHED and set idle\n";
                         goto next_dispatch;
                     }
 
@@ -443,6 +467,7 @@ struct SchedulerImpl
 
         next_dispatch:
             workerReady[coreId].store(true);
+            if (diagLogging) std::cout << "[Diag] Core " << coreId << " set idle (end of worker loop)\n";
         }
     }
 
@@ -486,6 +511,10 @@ struct SchedulerImpl
 
 Scheduler::Scheduler() : impl_(std::make_unique<SchedulerImpl>()) {}
 Scheduler::~Scheduler() { shutdown(); }
+
+void Scheduler::setDiagLogging(bool on) {
+    impl_->diagLogging = on;
+}
 
 void Scheduler::start(const Config &cfg)
 {
@@ -584,10 +613,28 @@ SchedulerSnapshot Scheduler::getSnapshot()
         }
     }
 
-    // Recompute usedCores by inspecting workerReady flags (false => core busy)
-    snap.usedCores = 0;
-    for (int i = 0; i < I.numCPU; ++i) {
-        if (!I.workerReady[i].load()) ++snap.usedCores;
+    // Option A: Recompute usedCores by inspecting workerReady flags (false => core busy)
+    // Option B: Count assigned core IDs
+    std::set<int> assignedCores;
+    for (auto &entry : I.processMap) {
+        if (entry.second.proc.coreId >= 0)
+            assignedCores.insert(entry.second.proc.coreId);
+    }
+    // If smoothing window has data, use averaged used core count
+    if (!I.recentUsedCores.empty()) {
+        long sum = 0;
+        for (int v : I.recentUsedCores) sum += v;
+        double avg = static_cast<double>(sum) / static_cast<double>(I.recentUsedCores.size());
+        snap.usedCores = static_cast<int>(std::round(avg));
+    }
+    else if (!assignedCores.empty()) {
+        snap.usedCores = static_cast<int>(assignedCores.size());
+    } else {
+        // Fallback to workerReady flags
+        snap.usedCores = 0;
+        for (int i = 0; i < I.numCPU; ++i) {
+            if (!I.workerReady[i].load()) ++snap.usedCores;
+        }
     }
     return snap;
 }

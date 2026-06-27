@@ -236,6 +236,22 @@ void runConsole(SchedT &sched, Config &cfg)
             continue;
         }
 
+        // ---- diag-on / diag-off (enable/disable scheduler diagnostics) ----
+        if (line == "diag-on")
+        {
+            std::cout << "[console] >> Routing: 'diag-on' → sched.setDiagLogging(true)\n";
+            sched.setDiagLogging(true);
+            std::cout << "Diagnostic logging enabled.\n";
+            continue;
+        }
+        if (line == "diag-off")
+        {
+            std::cout << "[console] >> Routing: 'diag-off' → sched.setDiagLogging(false)\n";
+            sched.setDiagLogging(false);
+            std::cout << "Diagnostic logging disabled.\n";
+            continue;
+        }
+
         // Spawn a single batch process on demand
         if (line == "spawn-batch")
         {
