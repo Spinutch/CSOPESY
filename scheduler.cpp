@@ -71,7 +71,6 @@ struct SchedulerImpl
     uint64_t maxIns = 100;
     uint64_t delayPerExec = 0;
     bool seedProcesses = false; // if true, seed every process with x,y,z and fixed FOR program
-    bool diagLogging = false;   // when true, emit diagnostic logs for dispatch/worker state
 
     // --- Process store ---
     std::mutex storeMu;
@@ -290,10 +289,6 @@ struct SchedulerImpl
                     cp.ticksOnCore = 0;
                     coreSlots[c] = pname;
 
-                    if (diagLogging) {
-                        std::cout << "[Diag] Dispatching '" << pname << "' -> Core " << c << " (readyQueue=" << readyQueue.size() << ")\n";
-                    }
-
                     workerReady[c].store(false);
                     workerCv[c].notify_one(); // wake the worker
                     //    std::cout << "[Scheduler] Dispatched '" << pname
@@ -343,7 +338,6 @@ struct SchedulerImpl
             if (pname.empty())
             {
                 workerReady[coreId].store(true);
-                if (diagLogging) std::cout << "[Diag] Core " << coreId << " found no assignment and set idle\n";
                 continue;
             }
 
@@ -394,7 +388,6 @@ struct SchedulerImpl
                             cp.proc.coreId = -1;
                             coreSlots[coreId] = "";
                             workerReady[coreId].store(true);
-                            if (diagLogging) std::cout << "[Diag] Core " << coreId << " finished process and set idle\n";
                             goto next_dispatch;
                         }
                     }
@@ -406,7 +399,6 @@ struct SchedulerImpl
                         cp.proc.coreId = -1;
                         coreSlots[coreId] = "";
                         workerReady[coreId].store(true);
-                        if (diagLogging) std::cout << "[Diag] Core " << coreId << " put process to sleep and set idle\n";
                         goto next_dispatch;
                     }
                     else if (res.type == StepResult::FINISHED) {
@@ -414,7 +406,6 @@ struct SchedulerImpl
                         cp.proc.coreId = -1;
                         coreSlots[coreId] = "";
                         workerReady[coreId].store(true);
-                        if (diagLogging) std::cout << "[Diag] Core " << coreId << " process FINISHED and set idle\n";
                         goto next_dispatch;
                     }
 
@@ -467,7 +458,6 @@ struct SchedulerImpl
 
         next_dispatch:
             workerReady[coreId].store(true);
-            if (diagLogging) std::cout << "[Diag] Core " << coreId << " set idle (end of worker loop)\n";
         }
     }
 
@@ -511,10 +501,6 @@ struct SchedulerImpl
 
 Scheduler::Scheduler() : impl_(std::make_unique<SchedulerImpl>()) {}
 Scheduler::~Scheduler() { shutdown(); }
-
-void Scheduler::setDiagLogging(bool on) {
-    impl_->diagLogging = on;
-}
 
 void Scheduler::start(const Config &cfg)
 {

@@ -29,25 +29,6 @@
 // ---------------------------------------------------------------------------
 std::atomic<uint64_t> g_cpuTick{0};
 
-// ---------------------------------------------------------------------------
-// Config::loadFromFile stub
-// (The real one lives in M4's config.cpp. Here we fake success and fill
-//  reasonable defaults so we don't need config.txt to be present.)
-// ---------------------------------------------------------------------------
-bool Config::loadFromFile(const std::string& /*fileName*/) {
-    // Try to read the real file first; fall back to hardcoded defaults.
-    // For the harness, just set defaults and mark initialized.
-    numCPU           = 4;
-    scheduler        = "rr";
-    quantumCycles    = 5;
-    batchProcessFreq = 3;
-    minIns           = 10;
-    maxIns           = 50;
-    delayPerExec     = 0;
-    initialized      = true;
-    std::cout << "[Config stub] Loaded hardcoded defaults (no config.txt needed).\n";
-    return true;
-}
 
 // ---------------------------------------------------------------------------
 // StubScheduler  –  feeds canned data to M1's rendering code

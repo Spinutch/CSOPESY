@@ -34,9 +34,6 @@ public:
     // Clean shutdown (called by M4's main before exit)
     void shutdown();
 
-    // Enable/disable diagnostic logging at runtime
-    void setDiagLogging(bool on);
-
 private:
     std::unique_ptr<SchedulerImpl> impl_;
 };
