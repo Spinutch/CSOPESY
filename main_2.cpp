@@ -19,13 +19,6 @@
 #include <thread>
 #include <iomanip>
 
-// ---------------------------------------------------------------------------
-// Config::loadFromFile stub (M4 owns the real one)
-// ---------------------------------------------------------------------------
-bool Config::loadFromFile(const std::string& /*f*/) {
-    initialized = true;
-    return true;
-}
 
 // ---------------------------------------------------------------------------
 // Test helpers
