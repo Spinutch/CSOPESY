@@ -13,7 +13,6 @@ static uint16_t resolveOperand(Process &p, const Instruction &ins, bool isSrc1) 
 }
 
 StepResult stepProcess(Process &p, int coreId, uint64_t tick) {
-    // Use cached flattened instructions if available
     std::vector<Instruction> flat = p.getFlattenedInstructions();
 
     if (p.executedCommands >= static_cast<int>(flat.size())) {
@@ -25,8 +24,6 @@ StepResult stepProcess(Process &p, int coreId, uint64_t tick) {
 
     switch (ins.type) {
     case InstructionType::PRINT: {
-        // Support placeholders in msg like "Value: {x}" which will be replaced
-        // with the current variable values. If no placeholders, append src fields.
         std::string outMsg;
         const std::string &s = ins.msg;
         for (size_t i = 0; i < s.size(); ++i) {

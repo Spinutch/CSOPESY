@@ -1,10 +1,8 @@
 #include "Config.h"
 #include <fstream>
 #include <sstream>
-#include <algorithm>
 #include <iostream>
 
-// Helper logic to trim quotes from the scheduler string
 static std::string cleanQuotes(std::string str) {
     str.erase(0, str.find_first_not_of(" \t\r\n"));
     str.erase(str.find_last_not_of(" \t\r\n") + 1);
@@ -14,7 +12,6 @@ static std::string cleanQuotes(std::string str) {
     return str;
 }
 
-// Helper template to clamp values safely within project spec ranges
 template <typename T>
 static T clampVal(T val, T minVal, T maxVal) {
     if (val < minVal) return minVal;
@@ -70,11 +67,10 @@ bool Config::loadFromFile(const std::string& fileName) {
         }
     }
 
-    // Double check sanity bounds
     if (minIns > maxIns) {
         std::swap(minIns, maxIns);
     }
 
-    initialized = true; // Flips flag so Member 1's console knows it can stop gating commands
+    initialized = true;
     return true;
 }

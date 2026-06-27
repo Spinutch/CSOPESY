@@ -18,44 +18,6 @@
 // self-contained even before M2/M3 hand over their real headers.
 // ---------------------------------------------------------------------------
 
-
-/* COMMENTED OUT BCS OF DUPLICATE DEFINITION
-// ---- Minimal Config contract (owned by M4, repeated here for M1 stubs) ----
-#ifndef CONFIG_H
-#define CONFIG_H
-#include <string>
-struct Config {
-    int         numCPU          = 1;
-    std::string scheduler       = "rr";
-    uint64_t    quantumCycles   = 5;
-    uint64_t    batchProcessFreq= 1;
-    uint64_t    minIns          = 10;
-    uint64_t    maxIns          = 100;
-    uint64_t    delayPerExec    = 0;
-    bool        initialized     = false;
-
-    bool loadFromFile(const std::string& fileName);
-};
-#endif // CONFIG_H */
-
-// COMMENTED OUT BCS OF DUPLICATE DEFINITION
-/*  ---- Minimal Process contract (owned by M3) --------------------------------
-#ifndef PROCESS_H
-#define PROCESS_H
-#include <iostream>
-#include <queue>
-struct Process {
-    int          id;
-    std::string  name;
-    ProcessState state;
-    std::queue<std::string> commands;
-    int          totalCommands;
-    int          executedCommands;
-    std::string  creationTimestamp;
-    int          coreId;           // -1 = no core
-};
-#endif // PROCESS_H */
-
 // ---- Minimal Scheduler contract (owned by M2) ------------------------------
 // M1 only needs the snapshot API. M2 will provide the real implementation.
 #ifndef SCHEDULER_INTERFACE

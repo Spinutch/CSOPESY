@@ -4,10 +4,10 @@ CSOPESY OS Emulator & Process Scheduler - Process Multiplexer Workspace
 Entry Point File: main.cpp
 
 Group Members:
- - Heather Soper    (Member 4 - Integration, Configuration & Heartbeat)
- - [Groupmate 1]    (Member 1 - Shell & System UI)
- - [Groupmate 2]    (Member 2 - Scheduler Engine)
- - Rai Isidro       (Member 3 - Process, Interpreter & UI)
+ - Justine Jaye Valdez  (Member 1 - Shell & System UI)
+ - Danika Francine Dy   (Member 2 - Scheduler Engine)
+ - Rai Isidro           (Member 3 - Process, Interpreter & UI)
+ - Heather Soper        (Member 4 - Integration, Configuration & Heartbeat)
 
 ---------------------------------------------------------------------------
 1. APPLICATION OVERVIEW
