@@ -1,8 +1,10 @@
 #include "Config.h"
 #include <fstream>
 #include <sstream>
+#include <algorithm>
 #include <iostream>
 
+// Helper logic to trim quotes from the scheduler string
 static std::string cleanQuotes(std::string str) {
     str.erase(0, str.find_first_not_of(" \t\r\n"));
     str.erase(str.find_last_not_of(" \t\r\n") + 1);
@@ -12,6 +14,7 @@ static std::string cleanQuotes(std::string str) {
     return str;
 }
 
+// Helper template to clamp values safely within project spec ranges
 template <typename T>
 static T clampVal(T val, T minVal, T maxVal) {
     if (val < minVal) return minVal;
@@ -61,16 +64,33 @@ bool Config::loadFromFile(const std::string& fileName) {
                 unsigned long long val = std::stoull(valueStr);
                 delayPerExec = clampVal(val, 0ULL, 4294967296ULL);
             }
+            else if (key == "max-overall-mem") {
+                unsigned long long val = std::stoull(valueStr);
+                maxOverallMem = clampVal(val, 1ULL, 4294967296ULL);
+            }
+            else if (key == "mem-per-frame") {
+                unsigned long long val = std::stoull(valueStr);
+                memPerFrame = clampVal(val, 1ULL, 4294967296ULL);
+            }
+            else if (key == "mem-per-proc") {
+                unsigned long long val = std::stoull(valueStr);
+                memPerProc = clampVal(val, 1ULL, 4294967296ULL);
+            }
         } catch (const std::exception& e) {
             // Protects system from crashing if invalid character inputs are added to config.txt
             std::cerr << "[Config Warning] Field error for " << key << ": " << e.what() << "\n";
         }
     }
 
+    // Double check sanity bounds
     if (minIns > maxIns) {
         std::swap(minIns, maxIns);
     }
+    // A process can never require more memory than total main memory
+    if (memPerProc > maxOverallMem) {
+        memPerProc = maxOverallMem;
+    }
 
-    initialized = true;
+    initialized = true; // Flips flag so Member 1's console knows it can stop gating commands
     return true;
 }
