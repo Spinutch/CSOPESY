@@ -1,7 +1,7 @@
 ===========================================================================
-CSOPESY OS Emulator & Process Scheduler - Process Multiplexer Workspace
+CSOPESY OS Emulator & Process Scheduler
 ===========================================================================
-BRANCH: mo1
+BRANCH: week10hw
 Entry Point File: main.cpp
 
 Group Members:
@@ -22,10 +22,24 @@ This application is a 100% pure Console/CLI-based OS Emulator and Multi-threaded
 To compile the entire combined workspace codebase into a single unified 
 production executable target, run the following command in your terminal:
 
-g++ -std=c++17 -pthread main.cpp console.cpp system_ui.cpp util.cpp scheduler.cpp process.cpp interpreter.cpp Config.cpp Clock.cpp -o csopesy
+g++ -std=c++17 -pthread main.cpp console.cpp system_ui.cpp util.cpp scheduler.cpp process.cpp interpreter.cpp Config.cpp Clock.cpp MemoryManager.cpp -o csopesy
 
 ---------------------------------------------------------------------------
-3. RUNNING & EXECUTION INSTRUCTIONS
+3. INDEPENDENT HARNESS/TEST BUILDS
+---------------------------------------------------------------------------
+To verify individual modules separately during checkpoint testing loops without hitting linker dependency conflicts:
+
+A. Scheduler Validation Harness:
+g++ -std=c++17 -pthread scheduler.cpp Config.cpp Clock.cpp main_2.cpp -o test2
+
+B. Process/Interpreter Validation Harness:
+g++ -std=c++17 -pthread process.cpp interpreter.cpp Config.cpp Clock.cpp main_3.cpp -o test3
+
+C. Memory Manager Validation Harness:
+g++ -std=c++17 -pthread MemoryManager.cpp main_4_memory.cpp -o mem_test
+
+---------------------------------------------------------------------------
+4. RUNNING & EXECUTION INSTRUCTIONS
 ---------------------------------------------------------------------------
 1. Ensure that the "config.txt" properties file is placed in the exact same workspace directory as your compiled binary.
 2. Launch the terminal application:
