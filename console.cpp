@@ -283,5 +283,4 @@ void runConsole(SchedT &sched, Config &cfg)
 }
 
 #include "scheduler.h"
-template void runConsole<Scheduler>(Scheduler&, Config&);
-
+template void runConsole<Scheduler>(Scheduler &, Config &);
