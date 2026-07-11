@@ -252,7 +252,7 @@ struct SchedulerImpl
 
             // Quantum snapshot logic
             // Increments the quantumCycleCounter every quantumCycles tick and writes snapshot
-            if(quantumCycles > 0 && (tick % quantumCycles) == 0)
+            if(quantumCycles > 0 && (g_cpuTick % quantumCycles) == 0)
             {
                 quantumCycleCounter++;
                 memMgr.writeSnapshot(quantumCycleCounter);
@@ -403,11 +403,11 @@ struct SchedulerImpl
                         cp.ticksOnCore++;
                         // If process completed as a result of this instruction
                         if (cp.proc.executedCommands >= cp.proc.totalCommands) {
-                            memMgr.deallocate(cp.proc.id);
                             cp.proc.state = ProcessState::FINISHED;
                             cp.proc.coreId = -1;
                             coreSlots[coreId] = "";
                             workerReady[coreId].store(true);
+                            memMgr.deallocate(cp.proc.id);
                             goto next_dispatch;
                         }
                     }
