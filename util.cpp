@@ -16,6 +16,7 @@ std::string formatTimestamp()
     return std::string(buf);
 }
 
+<<<<<<< HEAD
 ProcView viewOf(const Process& p)
 {
     ProcView v;
@@ -40,3 +41,13 @@ ProcView viewOf(const Process& p)
 
     return v;
 }
+=======
+// ---------------------------------------------------------------------------
+// viewOf  –  Process -> ProcView conversion
+// ---------------------------------------------------------------------------
+// Declared in mo1.h but previously unimplemented anywhere in the codebase.
+// M2's scheduler.cpp needs this to populate SchedulerSnapshot::running /
+// ::finished, so it belongs alongside the other shared M1 utilities.
+// Takes the process's own logMutex (if present) so the copy of `logs` is
+// consistent even if M2's scheduler thread is appending to it concurrently.
+>>>>>>> e95fc867901b5c3764a9fd1145a63e9b3574976c
