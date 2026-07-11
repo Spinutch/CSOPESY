@@ -34,6 +34,7 @@
 #include "Process.h"
 #include "interpreter.h"
 #include <set>
+#include "MemoryManager.h"
 
 using ReadyQueue = std::deque<std::string>;
 
@@ -71,6 +72,9 @@ struct SchedulerImpl
     uint64_t maxIns = 100;
     uint64_t delayPerExec = 0;
     bool seedProcesses = false; // if true, seed every process with x,y,z and fixed FOR program
+
+    MemoryManager memMgr;
+    uint64_t quantumCycleCounter = 0;
 
     // --- Process store ---
     std::mutex storeMu;
@@ -246,6 +250,14 @@ struct SchedulerImpl
         {
             uint64_t tick = ++g_cpuTick;
 
+            // Quantum snapshot logic
+            // Increments the quantumCycleCounter every quantumCycles tick and writes snapshot
+            if(quantumCycles > 0 && (tick % quantumCycles) == 0)
+            {
+                quantumCycleCounter++;
+                memMgr.writeSnapshot(quantumCycleCounter);
+            }
+
             {
                 std::lock_guard<std::mutex> lk(storeMu);
 
@@ -283,6 +295,13 @@ struct SchedulerImpl
                         continue;
                     if (cp.sleeping)
                         continue;
+
+                    if(!memMgr.allocate(cp.proc.id, pname))
+                    {
+                        // If allocation fails (memory full) -> then don't dispatch
+                        readyQueue.push_back(pname); // Reverts back to the tail of the ready queue
+                        continue; // Leaves core idle this cycle / tries next process on next tick
+                    }
 
                     cp.proc.state = ProcessState::RUNNING;
                     cp.proc.coreId = c;
@@ -384,6 +403,7 @@ struct SchedulerImpl
                         cp.ticksOnCore++;
                         // If process completed as a result of this instruction
                         if (cp.proc.executedCommands >= cp.proc.totalCommands) {
+                            memMgr.deallocate(cp.proc.id);
                             cp.proc.state = ProcessState::FINISHED;
                             cp.proc.coreId = -1;
                             coreSlots[coreId] = "";
@@ -402,6 +422,7 @@ struct SchedulerImpl
                         goto next_dispatch;
                     }
                     else if (res.type == StepResult::FINISHED) {
+                        memMgr.deallocate(cp.proc.id);
                         cp.proc.state = ProcessState::FINISHED;
                         cp.proc.coreId = -1;
                         coreSlots[coreId] = "";
