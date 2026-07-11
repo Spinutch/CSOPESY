@@ -50,14 +50,10 @@ struct CoreProcess
     uint64_t ticksOnCore = 0;    // ticks spent on current core burst
     uint64_t sleepUntilTick = 0; // for SLEEP instruction (M3 sets this)
     bool sleeping = false;
-<<<<<<< HEAD
     bool inMemory = false;      // true once memMgr.allocate() has succeeded for this process;
                                  // stays true across RR requeues (process keeps its memory
                                  // block until it actually finishes) so it isn't re-allocated
                                  // on every subsequent quantum burst.
-=======
-    bool inMemory = false;
->>>>>>> e95fc867901b5c3764a9fd1145a63e9b3574976c
 
     // Converts to the public Process view (for M1 / M3 calls)
     Process toProcess() const
@@ -234,10 +230,6 @@ struct SchedulerImpl
 
         processMap[name] = cp;
         readyQueue.push_back(name);
-<<<<<<< HEAD
-=======
-
->>>>>>> e95fc867901b5c3764a9fd1145a63e9b3574976c
     }
 
     // Create a single batch process and return its generated name
@@ -315,7 +307,6 @@ struct SchedulerImpl
                     size_t attemptsLeft = readyQueue.size();
                     bool dispatchedThisCore = false;
 
-<<<<<<< HEAD
                     while (attemptsLeft > 0 && !readyQueue.empty())
                     {
                         --attemptsLeft;
@@ -366,28 +357,6 @@ struct SchedulerImpl
                         //         << " at tick " << tick << "\n";
                         dispatchedThisCore = true;
                         break;
-=======
-                    auto it = processMap.find(pname);
-                    if (it == processMap.end())
-                        continue; // stale entry
-
-                    CoreProcess &cp = it->second;
-                    if (cp.proc.state == ProcessState::FINISHED)
-                        continue;
-                    if (cp.sleeping)
-                        continue;
-
-
-                    if (!cp.inMemory)
-                    {
-                        if (!memMgr.allocate(cp.proc.id, pname))
-                        {
-                            // If allocation fails (memory full) -> then don't dispatch
-                        readyQueue.push_back(pname); // Reverts back to the tail of the ready queue
-                        continue; // Leaves core idle this cycle / tries next process on next tick
-                        }
-                        cp.inMemory = true;
->>>>>>> e95fc867901b5c3764a9fd1145a63e9b3574976c
                     }
 
                     (void)dispatchedThisCore; // core stays idle this tick if nothing was dispatchable
@@ -511,17 +480,12 @@ struct SchedulerImpl
                         goto next_dispatch;
                     }
                     else if (res.type == StepResult::FINISHED) {
-<<<<<<< HEAD
                         memMgr.deallocate(cp.proc.id);
                         cp.inMemory = false;
-=======
->>>>>>> e95fc867901b5c3764a9fd1145a63e9b3574976c
                         cp.proc.state = ProcessState::FINISHED;
                         cp.proc.coreId = -1;
                         coreSlots[coreId] = "";
                         workerReady[coreId].store(true);
-                        memMgr.deallocate(cp.proc.id);
-                        cp.inMemory = false;
                         goto next_dispatch;
                     }
 
@@ -632,7 +596,6 @@ void Scheduler::start(const Config &cfg)
     I.maxIns = cfg.maxIns;
     I.delayPerExec = cfg.delayPerExec;
     I.seedProcesses = cfg.seedProcesses;
-<<<<<<< HEAD
 
     // Wire up the memory manager with the config's memory parameters.
     // Without this call, MemoryManager's block list (blocks_) is never
@@ -641,9 +604,6 @@ void Scheduler::start(const Config &cfg)
     // forever, coreId stays -1, and nothing ever finishes.
     I.memMgr.configure(cfg.maxOverallMem, cfg.memPerFrame, cfg.memPerProc);
 
-=======
-    I.memMgr.configure(cfg.maxOverallMem, cfg.memPerFrame, cfg.memPerProc);
->>>>>>> e95fc867901b5c3764a9fd1145a63e9b3574976c
     // Size per-core arrays (atomic/mutex/cv are not copyable; use unique_ptr arrays)
     I.coreSlots.assign(cfg.numCPU, "");
     I.workerReady = std::make_unique<std::atomic<bool>[]>(cfg.numCPU);
