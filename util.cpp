@@ -28,25 +28,3 @@ std::string formatTimestamp()
 // ::finished, so it belongs alongside the other shared M1 utilities.
 // Takes the process's own logMutex (if present) so the copy of `logs` is
 // consistent even if M2's scheduler thread is appending to it concurrently.
-ProcView viewOf(const Process &p)
-{
-    ProcView v;
-    v.id = p.id;
-    v.name = p.name;
-    v.state = p.state;
-    v.totalCommands = p.totalCommands;
-    v.executedCommands = p.executedCommands;
-    v.creationTimestamp = p.creationTimestamp;
-    v.coreId = p.coreId;
-
-    if (p.logMutex)
-    {
-        std::lock_guard<std::mutex> lk(*p.logMutex);
-        v.logs = p.logs;
-    }
-    else
-    {
-        v.logs = p.logs;
-    }
-    return v;
-}

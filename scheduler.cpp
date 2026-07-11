@@ -50,6 +50,7 @@ struct CoreProcess
     uint64_t ticksOnCore = 0;    // ticks spent on current core burst
     uint64_t sleepUntilTick = 0; // for SLEEP instruction (M3 sets this)
     bool sleeping = false;
+    bool inMemory = false;
 
     // Converts to the public Process view (for M1 / M3 calls)
     Process toProcess() const
@@ -227,8 +228,6 @@ struct SchedulerImpl
         processMap[name] = cp;
         readyQueue.push_back(name);
 
-        processMap[name] = cp;
-        readyQueue.push_back(name);
     }
 
     // Create a single batch process and return its generated name
@@ -296,11 +295,16 @@ struct SchedulerImpl
                     if (cp.sleeping)
                         continue;
 
-                    if(!memMgr.allocate(cp.proc.id, pname))
+
+                    if (!cp.inMemory)
                     {
-                        // If allocation fails (memory full) -> then don't dispatch
+                        if (!memMgr.allocate(cp.proc.id, pname))
+                        {
+                            // If allocation fails (memory full) -> then don't dispatch
                         readyQueue.push_back(pname); // Reverts back to the tail of the ready queue
                         continue; // Leaves core idle this cycle / tries next process on next tick
+                        }
+                        cp.inMemory = true;
                     }
 
                     cp.proc.state = ProcessState::RUNNING;
@@ -408,6 +412,7 @@ struct SchedulerImpl
                             coreSlots[coreId] = "";
                             workerReady[coreId].store(true);
                             memMgr.deallocate(cp.proc.id);
+                            cp.inMemory = false;
                             goto next_dispatch;
                         }
                     }
@@ -422,11 +427,12 @@ struct SchedulerImpl
                         goto next_dispatch;
                     }
                     else if (res.type == StepResult::FINISHED) {
-                        memMgr.deallocate(cp.proc.id);
                         cp.proc.state = ProcessState::FINISHED;
                         cp.proc.coreId = -1;
                         coreSlots[coreId] = "";
                         workerReady[coreId].store(true);
+                        memMgr.deallocate(cp.proc.id);
+                        cp.inMemory = false;
                         goto next_dispatch;
                     }
 
@@ -537,6 +543,7 @@ void Scheduler::start(const Config &cfg)
     I.maxIns = cfg.maxIns;
     I.delayPerExec = cfg.delayPerExec;
     I.seedProcesses = cfg.seedProcesses;
+    I.memMgr.configure(cfg.maxOverallMem, cfg.memPerFrame, cfg.memPerProc);
     // Size per-core arrays (atomic/mutex/cv are not copyable; use unique_ptr arrays)
     I.coreSlots.assign(cfg.numCPU, "");
     I.workerReady = std::make_unique<std::atomic<bool>[]>(cfg.numCPU);
