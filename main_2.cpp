@@ -18,6 +18,8 @@
 #include <chrono>
 #include <thread>
 #include <iomanip>
+    sched.shutdown();
+
 
 
 // ---------------------------------------------------------------------------
@@ -46,6 +48,10 @@ static bool waitAllFinished(Scheduler& sched, int timeoutSec) {
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
     return false;
+}
+static bool fileExists(const std::string& path) {
+    std::ifstream f(path);
+    return f.good();
 }
 
 // ---------------------------------------------------------------------------
@@ -99,6 +105,10 @@ static void test_rr_quantum_yield() {
     cfg.maxIns           = 20;
     cfg.delayPerExec     = 0;
 
+    cfg.maxOverallMem    = 4096;
+    cfg.memPerProc       = 512;
+    cfg.memPerFrame      = 16;
+
     Scheduler sched;
     sched.start(cfg);
 
@@ -113,6 +123,10 @@ static void test_rr_quantum_yield() {
     assert(ok && "TEST 2 FAILED: RR processes did not all finish");
     assert(snap.finished.size() == 3 && "TEST 2 FAILED: wrong finished count");
     assert(snap.usedCores <= cfg.numCPU && "TEST 2 FAILED: usedCores > numCPU");
+
+    // Asserts memory stamps are being written at expected intervals
+    // Since processes run > 12 ins and quantum = 3, at least one snapshot should be generated.
+    assert(fileExists("memory_stamp_1.txt") && "TEST 2 FAILED: memory_stamp_1.txt file was never dumped");
 
     std::cout << "  TEST 2 PASSED\n";
     sched.shutdown();
@@ -256,6 +270,55 @@ static void test_start_stop_toggle() {
     sched.shutdown();
 }
 
+static void test_memory_full_requeue() {
+    std::cout << "\n=== TEST 6: Memory full requeue ===\n";
+    Config cfg;
+    cfg.numCPU = 2; // Setup 2 cores available
+    cfg.scheduler = "rr";
+    cfg.quantumCycles = 5;
+    cfg.batchProcessFreq = 999;
+    cfg.minIns = 10; cfg.maxIns = 10; cfg.delayPerExec = 0;
+    
+    // Setup memory boundary so ONLY 1 process can be allocated at a time
+    cfg.maxOverallMem = 1024; 
+    cfg.memPerProc = 1024;
+    cfg.memPerFrame = 16;
+
+    Scheduler sched;
+    sched.start(cfg);
+    sched.createNamedProcess("m1", cfg);
+    sched.createNamedProcess("m2", cfg);
+
+    // Wait a brief tick, observe that usedCores is exactly 1 because 'm2' fails allocation
+    // despite 2 cores being available. 'm2' is pushed back to the tail of the readyQueue.
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    auto snap = sched.getSnapshot();
+    
+    assert(snap.usedCores <= 1 && "TEST 6 FAILED: Dispatched process to core when memory should be full");
+    std::cout << "  Confirmed active core allocation capped at 1 due to memory constraints.\n";
+
+     bool sawCap = false;
+    for (int i = 0; i < 20; ++i) {
+        auto s = sched.getSnapshot();
+        assert(s.usedCores <= 1 && "TEST 6 FAILED: dispatched >1 process when memory allows only 1");
+        if (s.usedCores == 1) sawCap = true;
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    assert(sawCap && "TEST 6 FAILED: never observed a process actually get to run");
+
+    bool ok = waitAllFinished(sched, 30);
+    auto snap2 = sched.getSnapshot();
+    printSnapshot(snap2);
+    assert(ok && "TEST 6 FAILED: processes stalled under memory pressure (deadlock)");
+    assert(snap2.finished.size() == 2 && "TEST 6 FAILED: wrong finished count");
+
+    std::cout << "  TEST 6 PASSED\n";
+    sched.shutdown();
+
+}
+
+
+
 // ---------------------------------------------------------------------------
 // main
 // ---------------------------------------------------------------------------
@@ -270,6 +333,7 @@ int main() {
         test_cores_not_exceeded();
         test_batch_naming();
         test_start_stop_toggle();
+        test_memory_full_requeue();
     }
     catch (const std::exception& e) {
         std::cerr << "[FATAL] " << e.what() << "\n";
