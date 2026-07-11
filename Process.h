@@ -23,6 +23,7 @@ struct Process
     int executedCommands;
     std::string creationTimestamp;
     int coreId; // Which core is handling this process (-1 if none)
+    long long memBase = -1; // base address once allocated — for optional display only
     std::vector<Instruction> instructions;
     std::unordered_map<std::string, uint16_t> variables; // auto-declared, uint16_t, clamped
     std::shared_ptr<std::mutex> variablesMutex;

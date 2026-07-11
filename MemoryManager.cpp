@@ -9,6 +9,7 @@
 // ============================================================================
 
 #include "MemoryManager.h"
+#include "mo1.h"
 #include <algorithm>
 #include <fstream>
 #include <sstream>
@@ -104,10 +105,7 @@ void MemoryManager::writeSnapshot(uint64_t quantumCycle) const {
     // Timestamp in the same "MM/DD/YYYY HH:MM:SSAM/PM" format used elsewhere
     // in the project (see util.cpp's formatTimestamp — kept independent here
     // so MemoryManager has no dependency on M1's module).
-    std::time_t now = std::time(nullptr);
-    std::tm* tm = std::localtime(&now);
-    char tsBuf[32];
-    std::strftime(tsBuf, sizeof(tsBuf), "%m/%d/%Y %I:%M:%S%p", tm);
+    std::string tsBuf = formatTimestamp();
 
     int procCount = 0;
     uint64_t fragBytes = 0;
@@ -124,10 +122,8 @@ void MemoryManager::writeSnapshot(uint64_t quantumCycle) const {
 
     out << "Timestamp: (" << tsBuf << ")\n";
     out << "Number of processes in memory: " << procCount << "\n";
-    // NOTE: the assignment's mockup labels this "in KB" but the sample value
-    // (8192) is the raw fragmentation byte count with NO /1024 conversion —
-    // confirmed against the provided screenshot. Print fragBytes as-is.
-    out << "Total external fragmentation in KB: " << fragBytes << "\n\n";
+    // Print fragmentation in KB as required by the spec (bytes/1024).
+    out << "Total external fragmentation in KB: " << (fragBytes / 1024) << "\n\n";
 
     out << "----end---- = " << maxMem << "\n\n";
 
@@ -144,6 +140,6 @@ void MemoryManager::writeSnapshot(uint64_t quantumCycle) const {
         out << b->start << "\n\n";
     }
 
-    out << "----start----- = 0\n";
+    out << "----start---- = 0\n";
     out.close();
 }
