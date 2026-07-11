@@ -50,6 +50,10 @@ struct CoreProcess
     uint64_t ticksOnCore = 0;    // ticks spent on current core burst
     uint64_t sleepUntilTick = 0; // for SLEEP instruction (M3 sets this)
     bool sleeping = false;
+    bool inMemory = false;      // true once memMgr.allocate() has succeeded for this process;
+                                 // stays true across RR requeues (process keeps its memory
+                                 // block until it actually finishes) so it isn't re-allocated
+                                 // on every subsequent quantum burst.
 
     // Converts to the public Process view (for M1 / M3 calls)
     Process toProcess() const
@@ -226,9 +230,6 @@ struct SchedulerImpl
 
         processMap[name] = cp;
         readyQueue.push_back(name);
-
-        processMap[name] = cp;
-        readyQueue.push_back(name);
     }
 
     // Create a single batch process and return its generated name
@@ -251,8 +252,11 @@ struct SchedulerImpl
             uint64_t tick = ++g_cpuTick;
 
             // Quantum snapshot logic
-            // Increments the quantumCycleCounter every quantumCycles tick and writes snapshot
-            if(quantumCycles > 0 && (g_cpuTick % quantumCycles) == 0)
+            // Increments the quantumCycleCounter every quantumCycles tick and writes snapshot.
+            // Only write while there's actually something resident in memory — otherwise the
+            // master clock (which free-runs from 'initialize' to 'exit') spams empty
+            // memory_stamp_*.txt files the entire time the emulator sits idle.
+            if (quantumCycles > 0 && (g_cpuTick % quantumCycles) == 0 && memMgr.getProcessCountInMemory() > 0)
             {
                 quantumCycleCounter++;
                 memMgr.writeSnapshot(quantumCycleCounter);
@@ -275,44 +279,87 @@ struct SchedulerImpl
                     }
                 }
 
-                // Dispatch: assign front of ready queue to idle cores
+                // Dispatch: assign a ready process to each idle core.
+                //
+                // IMPORTANT: we do NOT just peek the front of readyQueue and give up on
+                // this core if that one entry can't get memory. With batch-process-freq
+                // spawning a brand-new (never-yet-resident) process almost every tick,
+                // the queue quickly fills with far more arrivals than the 4 memory slots
+                // can admit. If we only ever looked at the front, an already-resident
+                // process (just quantum-preempted, needs zero allocation — it already
+                // owns its block) could sit stuck behind a huge pile of new arrivals that
+                // keep failing to allocate, each cycle only shuffling 1-2 entries to the
+                // tail per core per tick. That starved already-running processes for
+                // seconds at a time even though a core was sitting idle and a dispatchable
+                // (already-resident) process existed a few slots back.
+                //
+                // Fix: for each idle core, scan forward through the queue (at most once
+                // through its current length) looking for the first candidate that is
+                // EITHER already resident (instant dispatch, no allocation needed) OR can
+                // successfully allocate a fresh block. Anything we skip over still gets
+                // sent to the tail, preserving the spec's "revert to tail on alloc failure"
+                // rule — we just don't stop looking after a single miss.
                 for (int c = 0; c < numCPU; ++c)
                 {
                     if (!workerReady[c].load())
                         continue; // core busy
-                    if (readyQueue.empty())
-                        break;
 
-                    std::string pname = readyQueue.front();
-                    readyQueue.pop_front();
+                    size_t attemptsLeft = readyQueue.size();
+                    bool dispatchedThisCore = false;
 
-                    auto it = processMap.find(pname);
-                    if (it == processMap.end())
-                        continue; // stale entry
-
-                    CoreProcess &cp = it->second;
-                    if (cp.proc.state == ProcessState::FINISHED)
-                        continue;
-                    if (cp.sleeping)
-                        continue;
-
-                    if(!memMgr.allocate(cp.proc.id, pname))
+                    while (attemptsLeft > 0 && !readyQueue.empty())
                     {
-                        // If allocation fails (memory full) -> then don't dispatch
-                        readyQueue.push_back(pname); // Reverts back to the tail of the ready queue
-                        continue; // Leaves core idle this cycle / tries next process on next tick
+                        --attemptsLeft;
+
+                        std::string pname = readyQueue.front();
+                        readyQueue.pop_front();
+
+                        auto it = processMap.find(pname);
+                        if (it == processMap.end())
+                            continue; // stale entry — drop it, try next candidate
+
+                        CoreProcess &cp = it->second;
+                        if (cp.proc.state == ProcessState::FINISHED)
+                            continue; // drop it, try next candidate
+                        if (cp.sleeping)
+                        {
+                            readyQueue.push_back(pname); // shouldn't normally happen, but be safe
+                            continue;
+                        }
+
+                        // Only allocate a new block the FIRST time this process enters memory.
+                        // A process keeps its block across RR requeues (it stays resident until
+                        // it finishes), so re-dispatching it for a later quantum burst must NOT
+                        // ask the memory manager for another block — doing so would (a) waste
+                        // memory the process already owns and (b) deadlock the whole system once
+                        // memory fills up, since already-resident processes would then fail their
+                        // own re-allocation forever.
+                        if (!cp.inMemory)
+                        {
+                            if (!memMgr.allocate(cp.proc.id, pname))
+                            {
+                                // If allocation fails (memory full) -> revert to tail, try next candidate
+                                readyQueue.push_back(pname);
+                                continue;
+                            }
+                            cp.inMemory = true;
+                        }
+
+                        cp.proc.state = ProcessState::RUNNING;
+                        cp.proc.coreId = c;
+                        cp.ticksOnCore = 0;
+                        coreSlots[c] = pname;
+
+                        workerReady[c].store(false);
+                        workerCv[c].notify_one(); // wake the worker
+                        //    std::cout << "[Scheduler] Dispatched '" << pname
+                        //;            << "' → Core " << c
+                        //         << " at tick " << tick << "\n";
+                        dispatchedThisCore = true;
+                        break;
                     }
 
-                    cp.proc.state = ProcessState::RUNNING;
-                    cp.proc.coreId = c;
-                    cp.ticksOnCore = 0;
-                    coreSlots[c] = pname;
-
-                    workerReady[c].store(false);
-                    workerCv[c].notify_one(); // wake the worker
-                    //    std::cout << "[Scheduler] Dispatched '" << pname
-                    //;            << "' → Core " << c
-                    //         << " at tick " << tick << "\n";
+                    (void)dispatchedThisCore; // core stays idle this tick if nothing was dispatchable
                 }
             }
 
@@ -326,8 +373,18 @@ struct SchedulerImpl
                 if (recentUsedCores.size() > smoothingWindow) recentUsedCores.pop_front();
             }
 
-            // ~1ms cycle sleep to avoid spinning the CPU
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            // Cycle sleep between master ticks.
+            // NOTE: this used to be 1ms, which combined with batch-process-freq=1
+            // spawned a new process every ~1ms (~1000/sec). With only 2 cores and
+            // 4 memory slots, arrival rate massively outpaced service rate, so the
+            // ready queue grew unbounded, almost nothing ever finished in any
+            // observable test window, and the quantum-cycle memory snapshot (every
+            // 4 ticks) fired ~250x/sec, which is how a few seconds of runtime
+            // produced thousands of memory_stamp_*.txt files. 100ms gives a demo
+            // pace where a 5-second scheduler-start window spawns ~50 processes,
+            // matching the assignment's expectation that most/all processes finish
+            // within the test window even though only 4 fit in memory at once.
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     }
 
@@ -408,6 +465,7 @@ struct SchedulerImpl
                             coreSlots[coreId] = "";
                             workerReady[coreId].store(true);
                             memMgr.deallocate(cp.proc.id);
+                            cp.inMemory = false;
                             goto next_dispatch;
                         }
                     }
@@ -423,6 +481,7 @@ struct SchedulerImpl
                     }
                     else if (res.type == StepResult::FINISHED) {
                         memMgr.deallocate(cp.proc.id);
+                        cp.inMemory = false;
                         cp.proc.state = ProcessState::FINISHED;
                         cp.proc.coreId = -1;
                         coreSlots[coreId] = "";
@@ -537,6 +596,14 @@ void Scheduler::start(const Config &cfg)
     I.maxIns = cfg.maxIns;
     I.delayPerExec = cfg.delayPerExec;
     I.seedProcesses = cfg.seedProcesses;
+
+    // Wire up the memory manager with the config's memory parameters.
+    // Without this call, MemoryManager's block list (blocks_) is never
+    // initialized (stays empty), so allocate() can never find a free block
+    // and every dispatch attempt fails silently — processes get requeued
+    // forever, coreId stays -1, and nothing ever finishes.
+    I.memMgr.configure(cfg.maxOverallMem, cfg.memPerFrame, cfg.memPerProc);
+
     // Size per-core arrays (atomic/mutex/cv are not copyable; use unique_ptr arrays)
     I.coreSlots.assign(cfg.numCPU, "");
     I.workerReady = std::make_unique<std::atomic<bool>[]>(cfg.numCPU);
@@ -614,9 +681,14 @@ SchedulerSnapshot Scheduler::getSnapshot()
         {
             snap.finished.push_back(v);
         }
-        else
+        else if (cp.proc.state == ProcessState::RUNNING)
         {
             snap.running.push_back(v);
+        }
+        else
+        {
+            // READY: created/preempted but not currently on a core.
+            snap.waiting.push_back(v);
         }
     }
 

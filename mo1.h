@@ -36,7 +36,8 @@ struct ProcView {
 };
 
 struct SchedulerSnapshot {
-    std::vector<ProcView> running;
+    std::vector<ProcView> running;  // actually dispatched to a core (coreId >= 0)
+    std::vector<ProcView> waiting;  // ready/queued, not yet dispatched (coreId == -1)
     std::vector<ProcView> finished;
     int usedCores  = 0;
     int totalCores = 0;

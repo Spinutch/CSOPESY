@@ -27,6 +27,51 @@ static std::string stateLabel(ProcessState s)
     return "Unknown";
 }
 
+// Cap how many process lines a section prints so screen -ls stays readable
+// even after hundreds of batch processes have been created. The full counts
+// still appear in the section headers; anything past the cap collapses into
+// a single "... and N more" line.
+static const size_t kMaxListed = 10;
+
+static void printProcLine(std::ostream &out, const ProcView &p, const std::string &coreLabel)
+{
+    out << "  " << std::left << std::setw(15) << p.name
+        << std::left << std::setw(28) << ("(" + p.creationTimestamp + ")")
+        << std::left << std::setw(15) << coreLabel
+        << std::right << std::setw(18) << (std::to_string(p.executedCommands) + " / " + std::to_string(p.totalCommands))
+        << "\n";
+}
+
+enum class ListLabel { CORE, QUEUED, FINISHED };
+
+static void printCappedSection(std::ostream &out, const std::vector<ProcView> &procs,
+                                ListLabel label)
+{
+    if (procs.empty())
+    {
+        out << "  (none)\n";
+        return;
+    }
+
+    size_t shown = std::min(procs.size(), kMaxListed);
+    for (size_t i = 0; i < shown; ++i)
+    {
+        const auto &p = procs[i];
+        std::string coreLabel;
+        switch (label)
+        {
+        case ListLabel::CORE:     coreLabel = "Core: " + std::to_string(p.coreId); break;
+        case ListLabel::QUEUED:   coreLabel = "Queued"; break;
+        case ListLabel::FINISHED: coreLabel = "Finished"; break;
+        }
+        printProcLine(out, p, coreLabel);
+    }
+    if (procs.size() > shown)
+    {
+        out << "  ... and " << (procs.size() - shown) << " more\n";
+    }
+}
+
 // ---------------------------------------------------------------------------
 // renderSystemStatus
 // ---------------------------------------------------------------------------
@@ -47,49 +92,22 @@ void renderSystemStatus(SchedT &sched, std::ostream &out)
     out << "  Cores available : " << avail << "\n";
     out << DIV2 << "\n";
 
-    // ---- Running processes ----
-    out << "\nRunning processes:\n";
+    // ---- Running processes (actually dispatched to a core; never -1) ----
+    out << "\nRunning processes (" << snap.running.size() << "):\n";
+    out << DIV << "\n";
+    printCappedSection(out, snap.running, ListLabel::CORE);
     out << DIV << "\n";
 
-    if (snap.running.empty())
-    {
-        out << "  (none)\n";
-    }
-    else
-    {
-        for (const auto &p : snap.running)
-        {
-            // Tabular alignment using iomanip
-            out << "  " << std::left << std::setw(15) << p.name
-                << std::left << std::setw(28) << ("(" + p.creationTimestamp + ")")
-                << std::left << std::setw(15) << ("Core: " + std::to_string(p.coreId))
-                << std::right << std::setw(18) << (std::to_string(p.executedCommands) + " / " + std::to_string(p.totalCommands))
-                << "\n";
-        }
-    }
-
+    // ---- Waiting processes (queued, not yet on a core) ----
+    out << "\nWaiting processes (" << snap.waiting.size() << "):\n";
+    out << DIV << "\n";
+    printCappedSection(out, snap.waiting, ListLabel::QUEUED);
     out << DIV << "\n";
 
     // ---- Finished processes ----
-    out << "\nFinished processes:\n";
+    out << "\nFinished processes (" << snap.finished.size() << "):\n";
     out << DIV << "\n";
-
-    if (snap.finished.empty())
-    {
-        out << "  (none)\n";
-    }
-    else
-    {
-        for (const auto &p : snap.finished)
-        {
-            out << "  " << std::left << std::setw(15) << p.name
-                << std::left << std::setw(28) << ("(" + p.creationTimestamp + ")")
-                << std::left << std::setw(15) << "Finished"
-                << std::right << std::setw(18) << (std::to_string(p.executedCommands) + " / " + std::to_string(p.totalCommands))
-                << "\n";
-        }
-    }
-
+    printCappedSection(out, snap.finished, ListLabel::FINISHED);
     out << DIV << "\n\n";
 }
 
