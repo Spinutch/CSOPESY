@@ -104,11 +104,16 @@ void renderProcessSmi(const Process &p, std::ostream &out)
 
     // Current instruction line (1-based) and total lines
     int curLine = 0;
-    if (p.totalCommands <= 0) {
+    if (p.totalCommands <= 0)
+    {
         curLine = 0;
-    } else if (p.state == ProcessState::FINISHED) {
+    }
+    else if (p.state == ProcessState::FINISHED)
+    {
         curLine = p.totalCommands;
-    } else {
+    }
+    else
+    {
         curLine = std::min(p.totalCommands, p.executedCommands + 1);
     }
 
@@ -120,34 +125,53 @@ void renderProcessSmi(const Process &p, std::ostream &out)
     // Render recent logs (thread-safe)
     out << "  Recent logs:\n";
     const size_t maxLines = 50;
-    if (p.logMutex) {
+    if (p.logMutex)
+    {
         std::lock_guard<std::mutex> lk(*p.logMutex);
         size_t start = (p.logs.size() > maxLines) ? (p.logs.size() - maxLines) : 0;
-        if (p.logs.empty()) {
+        if (p.logs.empty())
+        {
             out << "    (no logs)\n";
-        } else {
-            for (size_t i = start; i < p.logs.size(); ++i) {
+        }
+        else
+        {
+            for (size_t i = start; i < p.logs.size(); ++i)
+            {
                 out << "    " << p.logs[i] << "\n";
             }
         }
-    } else {
+    }
+    else
+    {
         // If no mutex, just print what's available
         size_t start = (p.logs.size() > maxLines) ? (p.logs.size() - maxLines) : 0;
-        if (p.logs.empty()) {
+        if (p.logs.empty())
+        {
             out << "    (no logs)\n";
-        } else {
-            for (size_t i = start; i < p.logs.size(); ++i) {
+        }
+        else
+        {
+            for (size_t i = start; i < p.logs.size(); ++i)
+            {
                 out << "    " << p.logs[i] << "\n";
             }
         }
     }
 
-    if (p.state == ProcessState::FINISHED) {
+    if (p.state == ProcessState::FINISHED)
+    {
         out << "\nFinished!\n";
     }
 
     out << DIV << "\n";
 }
 
+// See console.cpp for why this instantiation is guarded: it lets the M1
+// standalone test harness link without scheduler.cpp.
+#ifdef MO1_STANDALONE_TEST
+#include "stub_scheduler.h"
+template void renderSystemStatus<StubScheduler>(StubScheduler &, std::ostream &);
+#else
 #include "scheduler.h"
-template void renderSystemStatus<Scheduler>(Scheduler&, std::ostream&);
+template void renderSystemStatus<Scheduler>(Scheduler &, std::ostream &);
+#endif

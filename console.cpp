@@ -282,6 +282,14 @@ void runConsole(SchedT &sched, Config &cfg)
     }
 }
 
+// ---------------------------------------------------------------------------
+// Explicit template instantiation
+// ---------------------------------------------------------------------------
+// Production build (main.cpp / main_1.cpp default): instantiate against the
+#ifdef MO1_STANDALONE_TEST
+#include "stub_scheduler.h"
+template void runConsole<StubScheduler>(StubScheduler&, Config&);
+#else
 #include "scheduler.h"
 template void runConsole<Scheduler>(Scheduler&, Config&);
-
+#endif
