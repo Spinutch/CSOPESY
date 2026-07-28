@@ -25,9 +25,20 @@ public:
     // Snapshot for screen -ls / report-util
     SchedulerSnapshot getSnapshot();
 
+    // MO2: cumulative CPU-tick accounting for "vmstat" (Heather / Justine).
+    // idleTicks + activeTicks == totalTicks == numCPU * (master ticks elapsed).
+    struct CpuTickStats {
+        uint64_t idleTicks = 0;
+        uint64_t activeTicks = 0;
+        uint64_t totalTicks = 0;
+    };
+    CpuTickStats getCpuTickStats();
+
     // Process lookup for screen -r / screen -s
     Process* findProcess(const std::string& name);
-    void     createNamedProcess(const std::string& name, const Config& cfg);
+    // memSize: validated by the caller (see MemoryUtils::isValidMemorySize)
+    // before this is invoked -- e.g. from "screen -s <name> <mem_size>".
+    void     createNamedProcess(const std::string& name, const Config& cfg, uint64_t memSize = 0);
     // Create a single batch process (returns generated name)
     std::string createBatchProcess();
 

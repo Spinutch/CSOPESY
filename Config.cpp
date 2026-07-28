@@ -19,6 +19,30 @@ static T clampVal(T val, T minVal, T maxVal) {
     return val;
 }
 
+// --- MO2: memory-size validation helpers -----------------------------------
+// Memory fields must be a power of 2 within [2^6, 2^16] bytes. If a config
+// value isn't a power of 2, we round DOWN to the nearest power of 2 (after
+// clamping into range) rather than rejecting the whole config file outright.
+static bool isPowerOfTwo(unsigned long long v) {
+    return v > 0 && (v & (v - 1)) == 0;
+}
+
+static unsigned long long roundDownToPowerOfTwo(unsigned long long v) {
+    if (v == 0) return 1;
+    unsigned long long p = 1;
+    while ((p << 1) <= v) p <<= 1;
+    return p;
+}
+
+// Clamps to [minVal, maxVal] then snaps to the nearest power of 2 (rounded down).
+static unsigned long long clampToPow2(unsigned long long val, unsigned long long minVal, unsigned long long maxVal) {
+    unsigned long long clamped = clampVal(val, minVal, maxVal);
+    if (isPowerOfTwo(clamped)) return clamped;
+    unsigned long long rounded = roundDownToPowerOfTwo(clamped);
+    if (rounded < minVal) rounded = minVal; // stay in-range even if minVal itself isn't a power of 2
+    return rounded;
+}
+
 bool Config::loadFromFile(const std::string& fileName) {
     std::ifstream file(fileName);
     if (!file.is_open()) return false;
@@ -61,6 +85,23 @@ bool Config::loadFromFile(const std::string& fileName) {
                 unsigned long long val = std::stoull(valueStr);
                 delayPerExec = clampVal(val, 0ULL, 4294967296ULL);
             }
+            // --- MO2: memory manager keys ---
+            else if (key == "max-overall-mem") {
+                unsigned long long val = std::stoull(valueStr);
+                maxOverallMem = clampToPow2(val, 64ULL, 65536ULL);
+            }
+            else if (key == "mem-per-frame") {
+                unsigned long long val = std::stoull(valueStr);
+                memPerFrame = clampToPow2(val, 1ULL, 65536ULL);
+            }
+            else if (key == "min-mem-per-proc") {
+                unsigned long long val = std::stoull(valueStr);
+                minMemPerProc = clampToPow2(val, 64ULL, 65536ULL);
+            }
+            else if (key == "max-mem-per-proc") {
+                unsigned long long val = std::stoull(valueStr);
+                maxMemPerProc = clampToPow2(val, 64ULL, 65536ULL);
+            }
         } catch (const std::exception& e) {
             // Protects system from crashing if invalid character inputs are added to config.txt
             std::cerr << "[Config Warning] Field error for " << key << ": " << e.what() << "\n";
@@ -69,6 +110,10 @@ bool Config::loadFromFile(const std::string& fileName) {
 
     if (minIns > maxIns) {
         std::swap(minIns, maxIns);
+    }
+
+    if (minMemPerProc > maxMemPerProc) {
+        std::swap(minMemPerProc, maxMemPerProc);
     }
 
     initialized = true;

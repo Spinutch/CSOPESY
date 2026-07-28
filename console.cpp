@@ -6,6 +6,7 @@
 // ============================================================================
 #include "mo1.h"
 #include "scheduler.h"
+#include "MemoryUtils.h"
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -190,18 +191,40 @@ void runConsole(SchedT &sched, Config &cfg)
             continue;
         }
 
-        // ---- screen -s <name>  (create & attach) ----
+        // ---- screen -s <name> <mem_size>  (create & attach) ----
+        // MO2: a memory size is now required. Range: power of 2 in [64, 65536]
+        // bytes. Out-of-range/non-power-of-2 values are an "invalid memory
+        // allocation" and the process is NOT created.
         if (line.rfind("screen -s ", 0) == 0)
         {
-            std::string name = trim(line.substr(10));
-            if (name.empty())
+            std::string rest = trim(line.substr(10));
+            std::istringstream iss(rest);
+            std::string name, sizeToken;
+            iss >> name >> sizeToken;
+
+            if (name.empty() || sizeToken.empty())
             {
-                std::cout << "[console] Usage: screen -s <process_name>\n";
+                std::cout << "[console] Usage: screen -s <process_name> <process_memory_size>\n";
                 continue;
             }
+
+            uint64_t memSize = 0;
+            try {
+                memSize = std::stoull(sizeToken);
+            } catch (const std::exception&) {
+                std::cout << "[console] " << MemoryUtils::invalidMemoryMessage(0) << "\n";
+                continue;
+            }
+
+            if (!MemoryUtils::isValidMemorySize(memSize))
+            {
+                std::cout << "[console] " << MemoryUtils::invalidMemoryMessage(memSize) << "\n";
+                continue;
+            }
+
             std::cout << "[console] >> Routing: 'screen -s' → create process '"
-                      << name << "' then attach\n";
-            sched.createNamedProcess(name, cfg);
+                      << name << "' (" << memSize << " bytes) then attach\n";
+            sched.createNamedProcess(name, cfg, memSize);
             attachedProcessLoop(sched, name);
             continue;
         }
@@ -277,7 +300,7 @@ void runConsole(SchedT &sched, Config &cfg)
         // ---- Unknown ----
         std::cout << "[console] Unknown command: '" << line << "'\n";
         std::cout << "  Valid commands: initialize, exit, screen -ls, "
-                     "screen -s <name>, screen -r <name>,\n"
+                     "screen -s <name> <mem_size>, screen -r <name>,\n"
                      "                 scheduler-start, scheduler-stop, report-util\n";
     }
 }

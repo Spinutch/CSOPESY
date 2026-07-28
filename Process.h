@@ -23,6 +23,14 @@ struct Process
     int executedCommands;
     std::string creationTimestamp;
     int coreId; // Which core is handling this process (-1 if none)
+
+    // --- MO2: Required Memory per Process ---
+    // Requested via "screen -s <name> <mem_size>"; validated as a power of 2
+    // in [64, 65536] bytes (see MemoryUtils.h). numPages is derived from
+    // mem-per-frame at creation time (ceil(memorySize / mem-per-frame)).
+    uint64_t memorySize = 0;
+    uint32_t numPages = 0;
+
     std::vector<Instruction> instructions;
     std::unordered_map<std::string, uint16_t> variables; // auto-declared, uint16_t, clamped
     std::shared_ptr<std::mutex> variablesMutex;

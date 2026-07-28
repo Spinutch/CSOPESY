@@ -33,6 +33,7 @@
 #include "Clock.h"
 #include "Process.h"
 #include "interpreter.h"
+#include "MemoryUtils.h"
 #include <set>
 
 using ReadyQueue = std::deque<std::string>;
@@ -72,6 +73,11 @@ struct SchedulerImpl
     uint64_t delayPerExec = 0;
     bool seedProcesses = false; // if true, seed every process with x,y,z and fixed FOR program
 
+    // --- MO2: Required Memory per Process ---
+    uint64_t memPerFrame = 16;
+    uint64_t minMemPerProc = 64;
+    uint64_t maxMemPerProc = 65536;
+
     // --- Process store ---
     std::mutex storeMu;
     std::map<std::string, CoreProcess> processMap; // name → process
@@ -97,6 +103,10 @@ struct SchedulerImpl
     std::deque<int> recentUsedCores; // sliding window of used core counts
     size_t smoothingWindow = 50;     // default window size (ticks)
 
+    // --- MO2: cumulative CPU-tick accounting for vmstat (Heather) ---
+    std::atomic<uint64_t> activeTicksAccum{0};
+    std::atomic<uint64_t> idleTicksAccum{0};
+
     // RNG for batch generation
     std::mt19937 rng{std::random_device{}()};
 
@@ -119,6 +129,14 @@ struct SchedulerImpl
         return dist(rng);
     }
 
+    // MO2: rolled memory size (bytes) for scheduler-generated (batch) processes,
+    // per config keys min-mem-per-proc / max-mem-per-proc.
+    uint64_t randomMemorySize()
+    {
+        std::uniform_int_distribution<uint64_t> dist(minMemPerProc, maxMemPerProc);
+        return dist(rng);
+    }
+
     std::string nowTimestamp()
     {
         std::time_t t = std::time(nullptr);
@@ -129,7 +147,10 @@ struct SchedulerImpl
     }
 
     // Enqueue a fresh process into the ready queue (lock must NOT be held)
-    void enqueue(const std::string &name, int totalCmds)
+    // memSize: 0 means "not specified" -> roll one from [minMemPerProc, maxMemPerProc]
+    // (this is the batch/scheduler-start path). A caller that already validated an
+    // explicit size (e.g. "screen -s <name> <mem_size>") should pass it directly.
+    void enqueue(const std::string &name, int totalCmds, uint64_t memSize = 0)
     {
         std::lock_guard<std::mutex> lk(storeMu);
         CoreProcess cp;
@@ -140,6 +161,9 @@ struct SchedulerImpl
         cp.proc.executedCommands = 0;
         cp.proc.creationTimestamp = nowTimestamp();
         cp.proc.coreId = -1;
+        uint64_t resolvedMemSize = (memSize != 0) ? memSize : randomMemorySize();
+        cp.proc.memorySize = resolvedMemSize;
+        cp.proc.numPages = MemoryUtils::computeNumPages(resolvedMemSize, memPerFrame);
         cp.ticksOnCore = 0;
         cp.sleepUntilTick = 0;
         cp.sleeping = false;
@@ -298,6 +322,7 @@ struct SchedulerImpl
             }
 
             // Record current used cores into recent window (for smoothing)
+            // and accumulate cumulative active/idle CPU ticks (for vmstat).
             {
                 int curUsed = 0;
                 for (int i = 0; i < numCPU; ++i) {
@@ -305,6 +330,9 @@ struct SchedulerImpl
                 }
                 recentUsedCores.push_back(curUsed);
                 if (recentUsedCores.size() > smoothingWindow) recentUsedCores.pop_front();
+
+                activeTicksAccum.fetch_add(static_cast<uint64_t>(curUsed));
+                idleTicksAccum.fetch_add(static_cast<uint64_t>(numCPU - curUsed));
             }
 
             // ~1ms cycle sleep to avoid spinning the CPU
@@ -516,6 +544,9 @@ void Scheduler::start(const Config &cfg)
     I.maxIns = cfg.maxIns;
     I.delayPerExec = cfg.delayPerExec;
     I.seedProcesses = cfg.seedProcesses;
+    I.memPerFrame = cfg.memPerFrame;
+    I.minMemPerProc = cfg.minMemPerProc;
+    I.maxMemPerProc = cfg.maxMemPerProc;
     // Size per-core arrays (atomic/mutex/cv are not copyable; use unique_ptr arrays)
     I.coreSlots.assign(cfg.numCPU, "");
     I.workerReady = std::make_unique<std::atomic<bool>[]>(cfg.numCPU);
@@ -625,6 +656,16 @@ SchedulerSnapshot Scheduler::getSnapshot()
     return snap;
 }
 
+Scheduler::CpuTickStats Scheduler::getCpuTickStats()
+{
+    auto &I = *impl_;
+    CpuTickStats s;
+    s.activeTicks = I.activeTicksAccum.load();
+    s.idleTicks = I.idleTicksAccum.load();
+    s.totalTicks = s.activeTicks + s.idleTicks;
+    return s;
+}
+
 Process *Scheduler::findProcess(const std::string &name)
 {
     // NOTE: Returns pointer into a thread-shared map.
@@ -645,7 +686,7 @@ Process *Scheduler::findProcess(const std::string &name)
     return &tlsProc;
 }
 
-void Scheduler::createNamedProcess(const std::string &name, const Config &cfg)
+void Scheduler::createNamedProcess(const std::string &name, const Config &cfg, uint64_t memSize)
 {
     auto &I = *impl_;
     {
@@ -658,9 +699,10 @@ void Scheduler::createNamedProcess(const std::string &name, const Config &cfg)
     }
     // Use midpoint of min/max for named processes (M3 can override with real instruction list)
     int cmds = static_cast<int>((cfg.minIns + cfg.maxIns) / 2);
-    I.enqueue(name, cmds);
+    I.enqueue(name, cmds, memSize);
     std::cout << "[Scheduler] Created named process '" << name
-              << "' with " << cmds << " instructions.\n";
+              << "' with " << cmds << " instructions"
+              << (memSize ? (", " + std::to_string(memSize) + " bytes memory.\n") : ".\n");
 }
 
 std::string Scheduler::createBatchProcess()

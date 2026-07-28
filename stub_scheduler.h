@@ -107,12 +107,14 @@ public:
         return nullptr;
     }
 
-    void createNamedProcess(const std::string& name, const Config& cfg) {
+    void createNamedProcess(const std::string& name, const Config& cfg, uint64_t memSize = 0) {
         std::lock_guard<std::mutex> lk(mu_);
         for (auto& p : procs_) {
             if (p.name == name) return; // already exists
         }
-        procs_.push_back(makeFakeProcess(name, static_cast<int>((cfg.minIns + cfg.maxIns) / 2)));
+        Process p = makeFakeProcess(name, static_cast<int>((cfg.minIns + cfg.maxIns) / 2));
+        p.memorySize = memSize;
+        procs_.push_back(p);
     }
 
     std::string createBatchProcess() {
