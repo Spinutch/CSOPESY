@@ -4,6 +4,7 @@
 #include "mo1.h"
 #include "scheduler.h"
 #include "BackingStore.h"
+#include "MemoryManager.h"
 
 extern std::atomic<uint64_t> g_cpuTick;
 
@@ -14,12 +15,11 @@ int main() {
     // MO2: the backing store is a text file that must be
     // accessible at any given time -- construct it up front so
     // "csopesy-backing-store.txt" exists (empty, valid) from process start,
-    
-    // ready for Rai's Memory Manager to store/load pages into once merged.
+    // ready for the Memory Manager to store/load pages into.
     BackingStore systemBackingStore;
 
     try {
-        runConsole(systemScheduler, systemConfig);
+        runConsole(systemScheduler, systemConfig, systemBackingStore);
     }
     catch (const std::exception& e) {
         std::cerr << "[Fatal Exception]: " << e.what() << "\n";

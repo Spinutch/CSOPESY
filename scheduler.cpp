@@ -34,6 +34,7 @@
 #include "Process.h"
 #include "interpreter.h"
 #include "MemoryUtils.h"
+#include "MemoryManager.h"
 #include <set>
 
 using ReadyQueue = std::deque<std::string>;
@@ -77,6 +78,9 @@ struct SchedulerImpl
     uint64_t memPerFrame = 16;
     uint64_t minMemPerProc = 64;
     uint64_t maxMemPerProc = 65536;
+
+    // --- MO2: Memory Manager (owned by main.cpp, shared here by pointer) ---
+    MemoryManager* memoryManager = nullptr;
 
     // --- Process store ---
     std::mutex storeMu;
@@ -247,8 +251,10 @@ struct SchedulerImpl
         processMap[name] = cp;
         readyQueue.push_back(name);
 
-        processMap[name] = cp;
-        readyQueue.push_back(name);
+        // MO2: Allocate physical frames for the process via the Memory Manager.
+        if (memoryManager) {
+            memoryManager->allocateProcess(name, cp.proc.numPages);
+        }
     }
 
     // Create a single batch process and return its generated name
@@ -307,6 +313,14 @@ struct SchedulerImpl
                         continue;
                     if (cp.sleeping)
                         continue;
+
+                    // MO2: Context switch — swap in the new process's pages.
+                    // The old process's pages were already evicted when it was
+                    // preempted (RR quantum) or went to sleep. For a fresh
+                    // dispatch to an idle core, oldProcess is empty ("").
+                    if (memoryManager) {
+                        memoryManager->contextSwitch("", pname);
+                    }
 
                     cp.proc.state = ProcessState::RUNNING;
                     cp.proc.coreId = c;
@@ -416,6 +430,10 @@ struct SchedulerImpl
                             cp.proc.coreId = -1;
                             coreSlots[coreId] = "";
                             workerReady[coreId].store(true);
+                            // MO2: Release memory frames for the completed process.
+                            if (memoryManager) {
+                                memoryManager->deallocateProcess(pname);
+                            }
                             goto next_dispatch;
                         }
                     }
@@ -434,6 +452,10 @@ struct SchedulerImpl
                         cp.proc.coreId = -1;
                         coreSlots[coreId] = "";
                         workerReady[coreId].store(true);
+                        // MO2: Release memory frames for the completed process.
+                        if (memoryManager) {
+                            memoryManager->deallocateProcess(pname);
+                        }
                         goto next_dispatch;
                     }
 
@@ -474,6 +496,12 @@ struct SchedulerImpl
                             cp.ticksOnCore = 0;
                             coreSlots[coreId] = "";
                             readyQueue.push_back(pname); // requeue at tail
+
+                            // MO2: Evict the preempted process's pages to backing store.
+                            if (memoryManager) {
+                                memoryManager->contextSwitch(pname, "");
+                            }
+
                             // std::cout << "[Core " << coreId << "] RR quantum expired for '"
                             //           << pname << "' at tick " << g_cpuTick.load()
                             //           << " → requeued\n";
@@ -530,7 +558,7 @@ struct SchedulerImpl
 Scheduler::Scheduler() : impl_(std::make_unique<SchedulerImpl>()) {}
 Scheduler::~Scheduler() { shutdown(); }
 
-void Scheduler::start(const Config &cfg)
+void Scheduler::start(const Config &cfg, MemoryManager* memMgr)
 {
     auto &I = *impl_;
     if (I.alive)
@@ -547,6 +575,7 @@ void Scheduler::start(const Config &cfg)
     I.memPerFrame = cfg.memPerFrame;
     I.minMemPerProc = cfg.minMemPerProc;
     I.maxMemPerProc = cfg.maxMemPerProc;
+    I.memoryManager = memMgr;
     // Size per-core arrays (atomic/mutex/cv are not copyable; use unique_ptr arrays)
     I.coreSlots.assign(cfg.numCPU, "");
     I.workerReady = std::make_unique<std::atomic<bool>[]>(cfg.numCPU);

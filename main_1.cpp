@@ -33,6 +33,7 @@
 // ============================================================================
 
 #include "mo1.h" // Config, Process, ProcessState, SchedulerSnapshot, etc.
+#include "BackingStore.h"
 #include <iostream>
 #include <string>
 #include <vector>
@@ -211,10 +212,11 @@ int main(int argc, char **argv)
 
     Config cfg;
     SchedT sched;
+    BackingStore backingStore;
 
     try
     {
-        runConsole(sched, cfg);
+        runConsole(sched, cfg, backingStore);
     }
     catch (const std::exception &e)
     {

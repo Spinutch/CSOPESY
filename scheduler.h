@@ -9,14 +9,16 @@
 
 // Forward-declare implementation to keep header clean
 struct SchedulerImpl;
+class MemoryManager;
 
 class Scheduler {
 public:
     Scheduler();
     ~Scheduler();
 
-    // Called by M1 console after initialize
-    void start(const Config& cfg);
+    // Called by M1 console after initialize.
+    // memMgr may be nullptr if memory management is not yet wired in.
+    void start(const Config& cfg, MemoryManager* memMgr = nullptr);
 
     // Batch generation toggle (scheduler-start / scheduler-stop)
     void schedulerStart();

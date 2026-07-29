@@ -7,11 +7,15 @@
 #include "mo1.h"
 #include "scheduler.h"
 #include "MemoryUtils.h"
+#include "MemoryManager.h"
+#include "MemoryStats.h"
+#include "BackingStore.h"
 #include <iostream>
 #include <fstream>
 #include <sstream>
 #include <string>
 #include <algorithm>
+#include <memory>
 
 // ---------------------------------------------------------------------------
 // Internal: clear terminal (POSIX + Windows fallback)
@@ -122,9 +126,12 @@ static void attachedProcessLoop(SchedT &sched, const std::string &procName)
 // runConsole  –  main REPL
 // ---------------------------------------------------------------------------
 template <typename SchedT>
-void runConsole(SchedT &sched, Config &cfg)
+void runConsole(SchedT &sched, Config &cfg, BackingStore &backingStore)
 {
     printBanner();
+
+    // MO2: MemoryManager is created after config loads (needs frame size info).
+    std::unique_ptr<MemoryManager> memMgr;
 
     std::string line;
     while (true)
@@ -162,7 +169,10 @@ void runConsole(SchedT &sched, Config &cfg)
                 std::cout << "  min-ins          : " << cfg.minIns << "\n";
                 std::cout << "  max-ins          : " << cfg.maxIns << "\n";
                 std::cout << "  delay-per-exec   : " << cfg.delayPerExec << "\n";
-                sched.start(cfg);
+
+                // MO2: Create the memory manager now that config is loaded.
+                memMgr = std::make_unique<MemoryManager>(cfg, backingStore);
+                sched.start(cfg, memMgr.get());
             }
             else
             {
@@ -297,11 +307,40 @@ void runConsole(SchedT &sched, Config &cfg)
             continue;
         }
 
+        // ---- vmstat ----
+        if (line == "vmstat")
+        {
+            std::cout << "[console] >> Routing: 'vmstat' → buildMemoryStats\n";
+            int64_t usedBytes = memMgr ? static_cast<int64_t>(memMgr->getUsedMemoryBytes()) : -1;
+            MemoryStats stats = buildMemoryStats(cfg, sched, backingStore, usedBytes);
+
+            std::cout << "================================================================================\n";
+            std::cout << "  VMSTAT\n";
+            std::cout << "================================================================================\n";
+            std::cout << "  Total memory     : " << stats.totalMemory << " bytes\n";
+            if (stats.usedMemoryKnown) {
+                std::cout << "  Used memory      : " << stats.usedMemory << " bytes\n";
+                std::cout << "  Free memory      : " << stats.freeMemory << " bytes\n";
+            } else {
+                std::cout << "  Used memory      : N/A\n";
+                std::cout << "  Free memory      : N/A\n";
+            }
+            std::cout << "--------------------------------------------------------------------------------\n";
+            std::cout << "  Idle CPU ticks   : " << stats.idleCpuTicks << "\n";
+            std::cout << "  Active CPU ticks : " << stats.activeCpuTicks << "\n";
+            std::cout << "  Total CPU ticks  : " << stats.totalCpuTicks << "\n";
+            std::cout << "--------------------------------------------------------------------------------\n";
+            std::cout << "  Num paged in     : " << stats.numPagedIn << "\n";
+            std::cout << "  Num paged out    : " << stats.numPagedOut << "\n";
+            std::cout << "================================================================================\n";
+            continue;
+        }
+
         // ---- Unknown ----
         std::cout << "[console] Unknown command: '" << line << "'\n";
         std::cout << "  Valid commands: initialize, exit, screen -ls, "
                      "screen -s <name> <mem_size>, screen -r <name>,\n"
-                     "                 scheduler-start, scheduler-stop, report-util\n";
+                     "                 scheduler-start, scheduler-stop, report-util, vmstat\n";
     }
 }
 
@@ -311,8 +350,8 @@ void runConsole(SchedT &sched, Config &cfg)
 // Production build (main.cpp / main_1.cpp default): instantiate against the
 #ifdef MO1_STANDALONE_TEST
 #include "stub_scheduler.h"
-template void runConsole<StubScheduler>(StubScheduler&, Config&);
+template void runConsole<StubScheduler>(StubScheduler&, Config&, BackingStore&);
 #else
 #include "scheduler.h"
-template void runConsole<Scheduler>(Scheduler&, Config&);
+template void runConsole<Scheduler>(Scheduler&, Config&, BackingStore&);
 #endif
