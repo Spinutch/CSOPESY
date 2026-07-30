@@ -10,7 +10,9 @@
 #include "MemoryManager.h"
 #include "MemoryStats.h"
 #include "BackingStore.h"
+#include "InstructionParser.h"
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -256,6 +258,83 @@ void runConsole(SchedT &sched, Config &cfg, BackingStore &backingStore)
                 std::cout << "Process " << name << " not found.\n";
                 continue;
             }
+            // MO2 (Danika): a process that crashed on a memory access
+            // violation can no longer be re-attached to; report the
+            // shutdown instead, per the spec's updated "screen -r" behavior.
+            if (p->crashed)
+            {
+                std::ostringstream hexAddr;
+                hexAddr << "0x" << std::hex << std::uppercase << p->violationAddress;
+                std::cout << "Process " << name
+                          << " shut down due to memory access violation error that occurred at "
+                          << p->violationTimestamp << ". " << hexAddr.str() << " invalid.\n";
+                continue;
+            }
+            attachedProcessLoop(sched, name);
+            continue;
+        }
+
+        // ---- screen -c <name> <mem_size> "<instructions>"  (user-defined) ----
+        // MO2 (Danika): create & attach to a process whose instructions are
+        // exactly the 1-50 semicolon-separated ones the user supplied,
+        // instead of the scheduler's randomly-generated program.
+        if (line.rfind("screen -c ", 0) == 0)
+        {
+            std::string rest = trim(line.substr(10));
+
+            size_t firstQuote = rest.find('"');
+            if (firstQuote == std::string::npos || rest.empty() || rest.back() != '"' ||
+                firstQuote == rest.size() - 1)
+            {
+                std::cout << "[console] Usage: screen -c <process_name> <process_memory_size> "
+                             "\"<instructions>\"\n";
+                continue;
+            }
+
+            std::string header = trim(rest.substr(0, firstQuote));
+            std::string instrBody = rest.substr(firstQuote + 1, rest.size() - firstQuote - 2);
+
+            std::istringstream hiss(header);
+            std::string name, sizeToken;
+            hiss >> name >> sizeToken;
+            if (name.empty() || sizeToken.empty())
+            {
+                std::cout << "[console] Usage: screen -c <process_name> <process_memory_size> "
+                             "\"<instructions>\"\n";
+                continue;
+            }
+
+            uint64_t memSize = 0;
+            try {
+                memSize = std::stoull(sizeToken);
+            } catch (const std::exception&) {
+                std::cout << "[console] " << MemoryUtils::invalidMemoryMessage(0) << "\n";
+                continue;
+            }
+
+            if (!MemoryUtils::isValidMemorySize(memSize))
+            {
+                std::cout << "[console] " << MemoryUtils::invalidMemoryMessage(memSize) << "\n";
+                continue;
+            }
+
+            if (sched.findProcess(name))
+            {
+                std::cout << "[console] Process '" << name << "' already exists.\n";
+                continue;
+            }
+
+            InstructionParser::ParseResult parsed = InstructionParser::parseUserInstructions(instrBody);
+            if (!parsed.ok)
+            {
+                std::cout << "invalid command\n";
+                continue;
+            }
+
+            std::cout << "[console] >> Routing: 'screen -c' → create user-defined process '"
+                      << name << "' (" << memSize << " bytes, " << parsed.instructions.size()
+                      << " instruction(s)) then attach\n";
+            sched.createUserDefinedProcess(name, memSize, parsed.instructions);
             attachedProcessLoop(sched, name);
             continue;
         }
@@ -307,6 +386,45 @@ void runConsole(SchedT &sched, Config &cfg, BackingStore &backingStore)
             continue;
         }
 
+        // ---- process-smi (system-wide overview, nvidia-smi style) ----
+        if (line == "process-smi")
+        {
+            std::cout << "[console] >> Routing: 'process-smi' → buildMemoryStats + getSnapshot\n";
+
+            SchedulerSnapshot snap = sched.getSnapshot();
+            double cpuUtil = (snap.totalCores > 0)
+                                 ? (100.0 * snap.usedCores / snap.totalCores)
+                                 : 0.0;
+
+            uint64_t totalMem = cfg.maxOverallMem;
+            uint64_t usedMem = memMgr ? memMgr->getUsedMemoryBytes() : 0;
+            double memUtil = (totalMem > 0) ? (100.0 * usedMem / totalMem) : 0.0;
+
+            std::cout << "--------------------------------------------------------------------------------\n";
+            std::cout << "| PROCESS-SMI V01.00   Driver Version: 01.00 |\n";
+            std::cout << "--------------------------------------------------------------------------------\n";
+            std::cout << "CPU-Util: " << std::fixed << std::setprecision(0) << cpuUtil << "%\n";
+            std::cout << "Memory Usage: " << usedMem << "B / " << totalMem << "B\n";
+            std::cout << "Memory Util: " << std::fixed << std::setprecision(0) << memUtil << "%\n";
+            std::cout << "--------------------------------------------------------------------------------\n";
+            std::cout << "Running processes and memory usage:\n";
+            if (snap.running.empty())
+            {
+                std::cout << "  (none)\n";
+            }
+            else
+            {
+                for (const auto &p : snap.running)
+                {
+                    Process *pp = sched.findProcess(p.name);
+                    uint64_t memSize = pp ? pp->memorySize : 0;
+                    std::cout << p.name << " " << memSize << "B\n";
+                }
+            }
+            std::cout << "--------------------------------------------------------------------------------\n";
+            continue;
+        }
+
         // ---- vmstat ----
         if (line == "vmstat")
         {
@@ -340,8 +458,22 @@ void runConsole(SchedT &sched, Config &cfg, BackingStore &backingStore)
         std::cout << "[console] Unknown command: '" << line << "'\n";
         std::cout << "  Valid commands: initialize, exit, screen -ls, "
                      "screen -s <name> <mem_size>, screen -r <name>,\n"
-                     "                 scheduler-start, scheduler-stop, report-util, vmstat\n";
+                     "                 screen -c <name> <mem_size> \"<instructions>\",\n"
+                     "                 scheduler-start, scheduler-stop, report-util, process-smi, vmstat\n";
     }
+
+    // CRITICAL: stop and join every scheduler/worker/batch thread *before*
+    // this function returns. memMgr is a local variable -- the instant
+    // runConsole() returns, its destructor runs and frees the MemoryManager.
+    // The scheduler's background threads hold a raw MemoryManager* and keep
+    // calling into it (allocateProcess/contextSwitch/etc.) until they are
+    // actually joined. Without this, there's a window where those threads
+    // dereference an already-freed MemoryManager (use-after-free / data race,
+    // observed as sporadic segfaults/heap corruption under load). Calling
+    // shutdown() here (it's idempotent) guarantees all such threads have
+    // stopped before memMgr is torn down. main.cpp's own shutdown() call
+    // afterward becomes a harmless no-op.
+    sched.shutdown();
 }
 
 // ---------------------------------------------------------------------------

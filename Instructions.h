@@ -9,7 +9,9 @@ enum class InstructionType {
     ADD,
     SUBTRACT,
     SLEEP,
-    FOR
+    FOR,
+    READ,
+    WRITE
 };
 
 struct Instruction {
@@ -33,4 +35,7 @@ struct Instruction {
     // FOR
     uint32_t repeatCount = 1;
     std::vector<Instruction> forBody;
+
+    // READ / WRITE
+    uint32_t memAddress = 0;
 };

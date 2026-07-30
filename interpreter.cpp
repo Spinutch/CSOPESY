@@ -2,6 +2,16 @@
 #include <vector>
 #include <sstream>
 
+// "HH:MM:SS" (24-hour) wall-clock timestamp for the memory-access-violation
+// message printed by "screen -r" (see console.cpp).
+static std::string nowHHMMSS() {
+    std::time_t t = std::time(nullptr);
+    std::tm *tm = std::localtime(&t);
+    char buf[16];
+    std::strftime(buf, sizeof(buf), "%H:%M:%S", tm);
+    return buf;
+}
+
 static uint16_t resolveOperand(Process &p, const Instruction &ins, bool isSrc1) {
     if (isSrc1) {
         if (ins.src1IsVar) return p.readVar(ins.src1);
@@ -81,9 +91,35 @@ StepResult stepProcess(Process &p, int coreId, uint64_t tick) {
         // FORs are expanded; should not reach here. Treat as NOP if it does.
         p.executedCommands++;
         return StepResult{StepResult::RAN, 0};
+    case InstructionType::READ: {
+        if (!p.isValidAddress(ins.memAddress)) {
+            p.crashed = true;
+            p.violationAddress = ins.memAddress;
+            p.violationTimestamp = nowHHMMSS();
+            p.state = ProcessState::FINISHED;
+            return StepResult{StepResult::CRASHED, 0};
+        }
+        uint16_t val = p.readMem(ins.memAddress);
+        p.writeVar(ins.varName, val);
+        p.executedCommands++;
+        return StepResult{StepResult::RAN, 0};
     }
-
-    // Fallback
-    p.executedCommands++;
-    return StepResult{StepResult::RAN, 0};
+    case InstructionType::WRITE: {
+        if (!p.isValidAddress(ins.memAddress)) {
+            p.crashed = true;
+            p.violationAddress = ins.memAddress;
+            p.violationTimestamp = nowHHMMSS();
+            p.state = ProcessState::FINISHED;
+            return StepResult{StepResult::CRASHED, 0};
+        }
+        uint16_t val = ins.src1IsVar ? p.readVar(ins.src1) : ins.src1Val;
+        p.writeMem(ins.memAddress, val);
+        p.executedCommands++;
+        return StepResult{StepResult::RAN, 0};
+    }
+    default:
+        // Fallback
+        p.executedCommands++;
+        return StepResult{StepResult::RAN, 0};
+    }
 }

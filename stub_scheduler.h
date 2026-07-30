@@ -125,6 +125,20 @@ public:
         return name;
     }
 
+    // MO2 (Danika): test-double for "screen -c" -- just stores the process
+    // with the given instruction count; doesn't execute them (this stub
+    // never runs any instructions, real or user-defined).
+    void createUserDefinedProcess(const std::string& name, uint64_t memSize,
+                                   const std::vector<Instruction>& instructions) {
+        std::lock_guard<std::mutex> lk(mu_);
+        for (auto& p : procs_) {
+            if (p.name == name) return; // already exists
+        }
+        Process p = makeFakeProcess(name, static_cast<int>(instructions.size()));
+        p.memorySize = memSize;
+        procs_.push_back(p);
+    }
+
     // ---- shutdown -----------------------------------------------------
     void shutdown() {
         if (!alive_.exchange(false)) return;

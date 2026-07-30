@@ -16,6 +16,31 @@ uint16_t Process::readVar(const std::string& name)
     return it->second;
 }
 
+bool Process::isValidAddress(uint32_t addr) const
+{
+    // A uint16 value spans 2 bytes; both bytes must lie within the
+    // process's own allocated memory space.
+    if (memorySize < 2) return false;
+    return static_cast<uint64_t>(addr) + 1 < memorySize;
+}
+
+uint16_t Process::readMem(uint32_t addr)
+{
+    if (!memSpaceMutex) memSpaceMutex = std::make_shared<std::mutex>();
+    std::lock_guard<std::mutex> lk(*memSpaceMutex);
+    auto it = memSpace.find(addr);
+    if (it == memSpace.end())
+        return 0; // uninitialized memory reads as 0 per spec
+    return it->second;
+}
+
+void Process::writeMem(uint32_t addr, uint16_t val)
+{
+    if (!memSpaceMutex) memSpaceMutex = std::make_shared<std::mutex>();
+    std::lock_guard<std::mutex> lk(*memSpaceMutex);
+    memSpace[addr] = val;
+}
+
 void Process::writeVar(const std::string& name, long long val)
 {
     if (!variablesMutex) variablesMutex = std::make_shared<std::mutex>();

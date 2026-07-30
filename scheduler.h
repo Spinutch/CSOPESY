@@ -41,6 +41,13 @@ public:
     // memSize: validated by the caller (see MemoryUtils::isValidMemorySize)
     // before this is invoked -- e.g. from "screen -s <name> <mem_size>".
     void     createNamedProcess(const std::string& name, const Config& cfg, uint64_t memSize = 0);
+
+    // a process whose instruction list is exactly what InstructionParser
+    // produced, instead of the scheduler's usual randomly-generated program.
+    // memSize is validated by the caller, same contract as createNamedProcess.
+    void     createUserDefinedProcess(const std::string& name, uint64_t memSize,
+                                       const std::vector<Instruction>& instructions);
+
     // Create a single batch process (returns generated name)
     std::string createBatchProcess();
 

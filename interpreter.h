@@ -3,7 +3,7 @@
 #include "Process.h"
 
 struct StepResult {
-    enum Type { RAN, SLEEPING, FINISHED } type;
+    enum Type { RAN, SLEEPING, FINISHED, CRASHED } type;
     uint64_t sleepTicks = 0;
 };
 

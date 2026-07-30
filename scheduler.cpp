@@ -266,6 +266,39 @@ struct SchedulerImpl
         return name;
     }
 
+    // MO2 (Danika): "screen -c" -- enqueue a process with an explicit,
+    // already-parsed instruction list (InstructionParser output) instead of
+    // generating one. totalCommands is recomputed from the flattened stream
+    // so FOR-loop expansion is counted the same way enqueue() does above.
+    void enqueueUserDefined(const std::string &name, uint64_t memSize,
+                             const std::vector<Instruction> &userInstructions)
+    {
+        std::lock_guard<std::mutex> lk(storeMu);
+        CoreProcess cp;
+        cp.proc.id = nextId++;
+        cp.proc.name = name;
+        cp.proc.state = ProcessState::READY;
+        cp.proc.executedCommands = 0;
+        cp.proc.creationTimestamp = nowTimestamp();
+        cp.proc.coreId = -1;
+        cp.proc.memorySize = memSize;
+        cp.proc.numPages = MemoryUtils::computeNumPages(memSize, memPerFrame);
+        cp.ticksOnCore = 0;
+        cp.sleepUntilTick = 0;
+        cp.sleeping = false;
+
+        cp.proc.instructions = userInstructions;
+        cp.proc.invalidateFlatten();
+        cp.proc.totalCommands = static_cast<int>(cp.proc.getFlattenedInstructions().size());
+
+        processMap[name] = cp;
+        readyQueue.push_back(name);
+
+        if (memoryManager) {
+            memoryManager->allocateProcess(name, cp.proc.numPages);
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Scheduler loop (master thread)
     // Advances g_cpuTick, dispatches ready queue to idle cores.
@@ -740,6 +773,24 @@ std::string Scheduler::createBatchProcess()
     std::string name = I.createBatchProcess();
     std::cout << "[Scheduler] Created batch process '" << name << "'.\n";
     return name;
+}
+
+void Scheduler::createUserDefinedProcess(const std::string &name, uint64_t memSize,
+                                          const std::vector<Instruction> &instructions)
+{
+    auto &I = *impl_;
+    {
+        std::lock_guard<std::mutex> lk(I.storeMu);
+        if (I.processMap.count(name))
+        {
+            std::cout << "[Scheduler] Process '" << name << "' already exists.\n";
+            return;
+        }
+    }
+    I.enqueueUserDefined(name, memSize, instructions);
+    std::cout << "[Scheduler] Created user-defined process '" << name
+              << "' with " << instructions.size() << " instruction(s), "
+              << memSize << " bytes memory.\n";
 }
 
 void Scheduler::shutdown()
