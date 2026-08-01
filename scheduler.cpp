@@ -185,10 +185,21 @@ struct SchedulerImpl
             decl.varValue = 0;
             cp.proc.instructions.push_back(decl);
 
-            // Fill remaining instructions alternating ADD and PRINT
+            // MO2: addresses for the WRITE/READ instructions below cycle by
+            // memPerFrame so a multi-page process actually touches more than
+            // just its symbol-table page -- otherwise demand paging never
+            // sees more than 1 resident page per process. Valid range is
+            // [0, memorySize - 2] (a uint16 spans 2 bytes -- see
+            // Process::isValidAddress).
+            uint64_t addrSpan = (resolvedMemSize >= 2) ? (resolvedMemSize - 1) : 1;
+            uint64_t frameStride = std::max<uint64_t>(memPerFrame, 1);
+
+            // Fill remaining instructions cycling ADD / WRITE / READ / PRINT,
+            // per the spec's sample program (ADD ...; WRITE ...; READ ...; PRINT ...).
             int remaining = std::max(0, totalCmds - 1);
             for (int i = 0; i < remaining; ++i) {
-                if ((i % 2) == 0) {
+                switch (i % 4) {
+                case 0: {
                     Instruction add;
                     add.type = InstructionType::ADD;
                     add.dest = "x";
@@ -197,13 +208,34 @@ struct SchedulerImpl
                     add.src2IsVar = false;
                     add.src2Val = 1;
                     cp.proc.instructions.push_back(add);
-                } else {
+                    break;
+                }
+                case 1: {
+                    Instruction wr;
+                    wr.type = InstructionType::WRITE;
+                    wr.memAddress = static_cast<uint32_t>((static_cast<uint64_t>(i) * frameStride) % addrSpan);
+                    wr.src1IsVar = true;
+                    wr.src1 = "x";
+                    cp.proc.instructions.push_back(wr);
+                    break;
+                }
+                case 2: {
+                    Instruction rd;
+                    rd.type = InstructionType::READ;
+                    rd.varName = "y";
+                    rd.memAddress = static_cast<uint32_t>((static_cast<uint64_t>(i) * frameStride) % addrSpan);
+                    cp.proc.instructions.push_back(rd);
+                    break;
+                }
+                default: {
                     Instruction pr;
                     pr.type = InstructionType::PRINT;
                     pr.msg = "Batch value: ";
                     pr.src1IsVar = true;
                     pr.src1 = "x";
                     cp.proc.instructions.push_back(pr);
+                    break;
+                }
                 }
             }
         } else {
@@ -347,14 +379,9 @@ struct SchedulerImpl
                     if (cp.sleeping)
                         continue;
 
-                    // MO2: Context switch — swap in the new process's pages.
-                    // The old process's pages were already evicted when it was
-                    // preempted (RR quantum) or went to sleep. For a fresh
-                    // dispatch to an idle core, oldProcess is empty ("").
-                    if (memoryManager) {
-                        memoryManager->contextSwitch("", pname);
-                    }
-
+                    // MO2: No eager swap-in here -- pages are brought in lazily
+                    // by handlePageFault() as the worker actually executes
+                    // instructions that touch the symbol table or memory.
                     cp.proc.state = ProcessState::RUNNING;
                     cp.proc.coreId = c;
                     cp.ticksOnCore = 0;
@@ -453,7 +480,7 @@ struct SchedulerImpl
                     CoreProcess &cp = it->second;
 
                     // Call M3 interpreter to perform one step
-                    StepResult res = stepProcess(cp.proc, coreId, curTick);
+                    StepResult res = stepProcess(cp.proc, coreId, curTick, memoryManager);
 
                     if (res.type == StepResult::RAN) {
                         cp.ticksOnCore++;

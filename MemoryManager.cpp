@@ -42,28 +42,12 @@ bool MemoryManager::allocateProcess(const std::string& processName, uint32_t num
         return true;
     }
 
-    // Create the page table for this process.
+    // Create the page table for this process. No frames are touched here --
+    // pages are brought in lazily by handlePageFault() as the process
+    // actually references them (demand paging).
     ProcessPageTable pt;
     pt.totalPages = numPages;
     pageTables_[processName] = pt;
-
-    // Eagerly allocate frames for all pages of the process.
-    for (uint32_t page = 0; page < numPages; ++page) {
-        int frame = findFreeFrame();
-        if (frame < 0) {
-            // No free frame — evict one via FIFO.
-            frame = evictOne();
-            if (frame < 0) {
-                // Should never happen (eviction failed with no frames at all?).
-                std::cerr << "[MemoryManager] FATAL: eviction failed for "
-                          << processName << " page " << page << "\n";
-                return false;
-            }
-        }
-
-        // Place the page into the frame.
-        loadPageIntoFrame(processName, page, frame);
-    }
 
     return true;
 }

@@ -1,4 +1,5 @@
 #include "interpreter.h"
+#include "MemoryManager.h"
 #include <vector>
 #include <sstream>
 
@@ -12,6 +13,18 @@ static std::string nowHHMMSS() {
     return buf;
 }
 
+// The symbol table (DECLARE/ADD/SUBTRACT/PRINT variable access) always lives
+// in page 0 of the process's address space.
+static constexpr uint32_t kSymbolTablePage = 0;
+
+// Faults in the page containing `pageNum` for `p` before it's touched, if a
+// memory manager is wired in. No-op when memMgr is null (e.g. unit tests).
+static void touchPage(Process &p, MemoryManager *memMgr, uint32_t pageNum) {
+    if (memMgr) {
+        memMgr->handlePageFault(p.name, pageNum);
+    }
+}
+
 static uint16_t resolveOperand(Process &p, const Instruction &ins, bool isSrc1) {
     if (isSrc1) {
         if (ins.src1IsVar) return p.readVar(ins.src1);
@@ -22,7 +35,7 @@ static uint16_t resolveOperand(Process &p, const Instruction &ins, bool isSrc1) 
     }
 }
 
-StepResult stepProcess(Process &p, int coreId, uint64_t tick) {
+StepResult stepProcess(Process &p, int coreId, uint64_t tick, MemoryManager *memMgr) {
     std::vector<Instruction> flat = p.getFlattenedInstructions();
 
     if (p.executedCommands >= static_cast<int>(flat.size())) {
@@ -34,6 +47,7 @@ StepResult stepProcess(Process &p, int coreId, uint64_t tick) {
 
     switch (ins.type) {
     case InstructionType::PRINT: {
+        touchPage(p, memMgr, kSymbolTablePage);
         std::string outMsg;
         const std::string &s = ins.msg;
         for (size_t i = 0; i < s.size(); ++i) {
@@ -62,11 +76,13 @@ StepResult stepProcess(Process &p, int coreId, uint64_t tick) {
         return StepResult{StepResult::RAN, 0};
     }
     case InstructionType::DECLARE: {
+        touchPage(p, memMgr, kSymbolTablePage);
         p.writeVar(ins.varName, ins.varValue);
         p.executedCommands++;
         return StepResult{StepResult::RAN, 0};
     }
     case InstructionType::ADD: {
+        touchPage(p, memMgr, kSymbolTablePage);
         uint32_t a = resolveOperand(p, ins, true);
         uint32_t b = resolveOperand(p, ins, false);
         uint32_t res = a + b;
@@ -75,6 +91,7 @@ StepResult stepProcess(Process &p, int coreId, uint64_t tick) {
         return StepResult{StepResult::RAN, 0};
     }
     case InstructionType::SUBTRACT: {
+        touchPage(p, memMgr, kSymbolTablePage);
         uint32_t a = resolveOperand(p, ins, true);
         uint32_t b = resolveOperand(p, ins, false);
         uint32_t res = (a > b) ? (a - b) : 0;
@@ -99,6 +116,10 @@ StepResult stepProcess(Process &p, int coreId, uint64_t tick) {
             p.state = ProcessState::FINISHED;
             return StepResult{StepResult::CRASHED, 0};
         }
+        touchPage(p, memMgr, kSymbolTablePage); // writeVar(varName) below
+        if (memMgr) {
+            touchPage(p, memMgr, static_cast<uint32_t>(ins.memAddress / memMgr->getMemPerFrame()));
+        }
         uint16_t val = p.readMem(ins.memAddress);
         p.writeVar(ins.varName, val);
         p.executedCommands++;
@@ -111,6 +132,10 @@ StepResult stepProcess(Process &p, int coreId, uint64_t tick) {
             p.violationTimestamp = nowHHMMSS();
             p.state = ProcessState::FINISHED;
             return StepResult{StepResult::CRASHED, 0};
+        }
+        if (ins.src1IsVar) touchPage(p, memMgr, kSymbolTablePage); // readVar(src1) below
+        if (memMgr) {
+            touchPage(p, memMgr, static_cast<uint32_t>(ins.memAddress / memMgr->getMemPerFrame()));
         }
         uint16_t val = ins.src1IsVar ? p.readVar(ins.src1) : ins.src1Val;
         p.writeMem(ins.memAddress, val);

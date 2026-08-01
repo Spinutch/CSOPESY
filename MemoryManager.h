@@ -11,10 +11,14 @@
 //   - Used/free memory reporting for vmstat (wired into MemoryStats.h)
 //
 // Integration contract:
-//   - Scheduler calls allocateProcess() when a process is created.
+//   - Scheduler calls allocateProcess() when a process is created (registers
+//     the page table only -- no frames touched yet).
+//   - Interpreter calls handlePageFault() as each instruction actually
+//     references the symbol table or a memory address, bringing pages in
+//     one at a time (true demand paging).
 //   - Scheduler calls deallocateProcess() when a process finishes.
-//   - On context switch: contextSwitch(oldProc, newProc) evicts old pages
-//     and brings in new pages as needed.
+//   - On context switch: contextSwitch(oldProc, newProc) evicts old pages;
+//     new pages are picked up lazily via handlePageFault(), not preloaded.
 //   - getUsedMemoryBytes() feeds into MemoryStats::buildMemoryStats().
 //
 // Eviction policy: FIFO (oldest-loaded frame evicted first).
@@ -38,9 +42,10 @@ public:
     // Process lifecycle
     // -----------------------------------------------------------------------
 
-    // Allocates frames for a new process. Attempts to bring in all pages
-    // immediately (eager allocation). If there aren't enough free frames,
-    // evicts via FIFO. Returns true on success.
+    // Registers a new process's page table (totalPages = numPages). No
+    // frames are touched here -- pages are brought in lazily, one at a time,
+    // via handlePageFault() as the process actually references them (true
+    // demand paging). Returns true on success.
     bool allocateProcess(const std::string& processName, uint32_t numPages);
 
     // Releases all frames held by the process. Does NOT write to backing
@@ -78,6 +83,10 @@ public:
 
     // Returns the total number of frames in the system.
     uint32_t getTotalFrameCount() const;
+
+    // Returns the configured bytes-per-frame (page size), so callers can
+    // translate a byte address into a page number (addr / getMemPerFrame()).
+    uint64_t getMemPerFrame() const { return memPerFrame_; }
 
     // Returns true if the given page of a process is currently in memory.
     bool isPageResident(const std::string& processName, uint32_t pageNum) const;
