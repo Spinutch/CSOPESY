@@ -35,11 +35,32 @@ runs, including screen -s memory validation and the backing-store file):
 g++ -std=c++17 -pthread main.cpp console.cpp system_ui.cpp util.cpp scheduler.cpp process.cpp interpreter.cpp Config.cpp Clock.cpp MemoryUtils.cpp BackingStore.cpp -o csopesy
 
 ---------------------------------------------------------------------------
+2b. BUILD VIA CMAKE (RECOMMENDED)
+---------------------------------------------------------------------------
+The workspace also ships a CMakeLists.txt that builds the console
+application. It requires GLFW3 (via pkg-config) and OpenGL to be available
+on your system to configure.
+
+To configure and build:
+
+   cmake -S . -B build
+   cmake --build build -j4
+
+This produces the executable at ./build/emulator. Only main.cpp is linked
+as the entry point -- CMakeLists.txt explicitly excludes the old milestone
+files (main_1.cpp, main_2.cpp, main_3.cpp) and the scratch test file
+(test_memory.cpp), which would otherwise conflict with main.cpp's int main().
+
+To rebuild after pulling changes, just re-run the "cmake --build build -j4"
+command; re-run "cmake -S . -B build" only if CMakeLists.txt itself changed.
+
+---------------------------------------------------------------------------
 3. RUNNING & EXECUTION INSTRUCTIONS
 ---------------------------------------------------------------------------
-1. Ensure that the "config.txt" properties file is placed in the exact same workspace directory as your compiled binary.
+1. Ensure that the "config.txt" properties file is placed in the exact same workspace directory as your compiled binary (for CMake builds, copy or symlink config.txt into build/, or run the binary from the project root with ./build/emulator).
 2. Launch the terminal application:
-   ./csopesy
+   ./csopesy        (g++ build)
+   ./build/emulator (CMake build)
 3. Inside the emulator interface prompt, you MUST call the initialization gate sequence before any other operations can be utilized:
    root:\> initialize
 4. Following initialization, standard commands such as 'screen -ls', 'scheduler-start', and 'report-util' will become fully unlocked and operational. Use 'exit' to terminate.
