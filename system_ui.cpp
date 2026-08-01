@@ -166,12 +166,7 @@ void renderProcessSmi(const Process &p, std::ostream &out)
     out << DIV << "\n";
 }
 
-// See console.cpp for why this instantiation is guarded: it lets the M1
-// standalone test harness link without scheduler.cpp.
-#ifdef MO1_STANDALONE_TEST
-#include "stub_scheduler.h"
-template void renderSystemStatus<StubScheduler>(StubScheduler &, std::ostream &);
-#else
+// renderSystemStatus is only ever instantiated against the real Scheduler
+// now — see console.cpp for why the stub-scheduler approach was retired.
 #include "scheduler.h"
 template void renderSystemStatus<Scheduler>(Scheduler &, std::ostream &);
-#endif

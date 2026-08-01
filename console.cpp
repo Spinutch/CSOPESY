@@ -221,9 +221,12 @@ void runConsole(SchedT &sched, Config &cfg, BackingStore &backingStore)
             }
 
             uint64_t memSize = 0;
-            try {
+            try
+            {
                 memSize = std::stoull(sizeToken);
-            } catch (const std::exception&) {
+            }
+            catch (const std::exception &)
+            {
                 std::cout << "[console] " << MemoryUtils::invalidMemoryMessage(0) << "\n";
                 continue;
             }
@@ -305,9 +308,12 @@ void runConsole(SchedT &sched, Config &cfg, BackingStore &backingStore)
             }
 
             uint64_t memSize = 0;
-            try {
+            try
+            {
                 memSize = std::stoull(sizeToken);
-            } catch (const std::exception&) {
+            }
+            catch (const std::exception &)
+            {
                 std::cout << "[console] " << MemoryUtils::invalidMemoryMessage(0) << "\n";
                 continue;
             }
@@ -436,10 +442,13 @@ void runConsole(SchedT &sched, Config &cfg, BackingStore &backingStore)
             std::cout << "  VMSTAT\n";
             std::cout << "================================================================================\n";
             std::cout << "  Total memory     : " << stats.totalMemory << " bytes\n";
-            if (stats.usedMemoryKnown) {
+            if (stats.usedMemoryKnown)
+            {
                 std::cout << "  Used memory      : " << stats.usedMemory << " bytes\n";
                 std::cout << "  Free memory      : " << stats.freeMemory << " bytes\n";
-            } else {
+            }
+            else
+            {
                 std::cout << "  Used memory      : N/A\n";
                 std::cout << "  Free memory      : N/A\n";
             }
@@ -479,11 +488,12 @@ void runConsole(SchedT &sched, Config &cfg, BackingStore &backingStore)
 // ---------------------------------------------------------------------------
 // Explicit template instantiation
 // ---------------------------------------------------------------------------
-// Production build (main.cpp / main_1.cpp default): instantiate against the
-#ifdef MO1_STANDALONE_TEST
-#include "stub_scheduler.h"
-template void runConsole<StubScheduler>(StubScheduler&, Config&, BackingStore&);
-#else
+// runConsole is only ever instantiated against the real Scheduler now:
+// buildMemoryStats() (called from the process-smi / vmstat handlers above)
+// takes a concrete Scheduler&, not a template parameter, so a stand-in
+// scheduler type can no longer satisfy this template. Standalone testing
+// without scheduler.cpp/MemoryManager.cpp/BackingStore.cpp is therefore not
+// possible for this file anymore — see main_1.cpp for the integration test
+// this now requires instead.
 #include "scheduler.h"
-template void runConsole<Scheduler>(Scheduler&, Config&, BackingStore&);
-#endif
+template void runConsole<Scheduler>(Scheduler &, Config &, BackingStore &);
