@@ -13,7 +13,12 @@ Group Members (MO2 task split):
 ---------------------------------------------------------------------------
 1. APPLICATION OVERVIEW
 ---------------------------------------------------------------------------
-This application is a 100% pure Console/CLI-based OS Emulator and Multi-threaded Process Scheduler built using C++17. It features a space-separated configuration loader, automated boundary clamping, a background thread execution engine supporting FCFS and Round Robin scheduling, a global atomic cycle heartbeat clock, and (MO2) a demand-paging memory manager with backing-store support.
+This application is a 100% pure Console/CLI-based OS Emulator and
+Multi-threaded Process Scheduler built using C++17. It features a
+space-separated configuration loader, automated boundary clamping, a
+background thread execution engine supporting FCFS and Round Robin
+scheduling, a global atomic cycle heartbeat clock, and (MO2) a demand-paging
+memory manager with backing-store support.
 
 ---------------------------------------------------------------------------
 2. SYSTEM COMPILATION INSTRUCTIONS
@@ -22,24 +27,13 @@ This application is a 100% pure Console/CLI-based OS Emulator and Multi-threaded
 To compile the entire combined workspace codebase into a single unified
 production executable target, run the following command in your terminal:
 
-g++ -std=c++17 -pthread main.cpp console.cpp system_ui.cpp util.cpp scheduler.cpp process.cpp interpreter.cpp Config.cpp Clock.cpp MemoryUtils.cpp BackingStore.cpp MemoryManager.cpp -o csopesy
-
-NOTE: MemoryManager.cpp (the frame table / page fault / eviction engine) is
-owned by Rai and is not yet present in the workspace as of this revision.
-The build command above is pre-registered per the MO2 file layout; it will
-not link until MemoryManager.cpp/.h are merged in. Until then, drop
-"MemoryManager.cpp" from the command below to build the current state of
-the project (everything except real demand paging already compiles and
-runs, including screen -s memory validation and the backing-store file):
-
-g++ -std=c++17 -pthread main.cpp console.cpp system_ui.cpp util.cpp scheduler.cpp process.cpp interpreter.cpp Config.cpp Clock.cpp MemoryUtils.cpp BackingStore.cpp -o csopesy
+g++ -std=c++17 -pthread main.cpp console.cpp system_ui.cpp util.cpp scheduler.cpp process.cpp interpreter.cpp Config.cpp Clock.cpp MemoryUtils.cpp BackingStore.cpp MemoryManager.cpp InstructionParser.cpp -o csopesy
 
 ---------------------------------------------------------------------------
 2b. BUILD VIA CMAKE (RECOMMENDED)
 ---------------------------------------------------------------------------
 The workspace also ships a CMakeLists.txt that builds the console
-application. It requires GLFW3 (via pkg-config) and OpenGL to be available
-on your system to configure.
+application.
 
 To configure and build:
 
@@ -55,32 +49,83 @@ To rebuild after pulling changes, just re-run the "cmake --build build -j4"
 command; re-run "cmake -S . -B build" only if CMakeLists.txt itself changed.
 
 ---------------------------------------------------------------------------
-3. RUNNING & EXECUTION INSTRUCTIONS
+3. RUNNING INSTRUCTIONS
 ---------------------------------------------------------------------------
-1. Ensure that the "config.txt" properties file is placed in the exact same workspace directory as your compiled binary (for CMake builds, copy or symlink config.txt into build/, or run the binary from the project root with ./build/emulator).
+1. Ensure that the "config.txt" properties file is placed in the exact same
+   workspace directory as your compiled binary (for CMake builds, copy or
+   symlink config.txt into build/, or run the binary from the project root
+   with ./build/emulator).
 2. Launch the terminal application:
    ./csopesy        (g++ build)
    ./build/emulator (CMake build)
-3. Inside the emulator interface prompt, you MUST call the initialization gate sequence before any other operations can be utilized:
+3. Inside the emulator interface prompt, you MUST call the initialization
+   gate sequence before any other command is recognized:
    root:\> initialize
-4. Following initialization, standard commands such as 'screen -ls', 'scheduler-start', and 'report-util' will become fully unlocked and operational. Use 'exit' to terminate.
-5. MO2 commands:
-   - screen -s <process_name> <process_memory_size>   : creates a process with the given memory allocation.
-     Size must be a power of 2 in [64, 65536] bytes; otherwise the console
-     prints "invalid memory allocation: <size> ..." and does NOT create the
-     process. Example: screen -s process1 256
-   - csopesy-backing-store.txt  : written to the working directory at startup and
-     kept live-updated as pages are swapped in/out. Open it any time to inspect
-     the current backing store contents (empty until Rai's Memory Manager
-     starts evicting/loading pages through BackingStore.h).
-   - process-smi / vmstat   : (pending Justine's CLI implementation) will render
-     memory/CPU-tick data assembled via MemoryStats.h once Rai's frame table
-     can report used/free memory.
-   - screen -c <process_name> <mem_size> "<instructions>"  : (pending Danika) creates
-     a process with 1-50 semicolon-separated user-defined instructions.
 
 ---------------------------------------------------------------------------
-4. CONFIG.TXT PARAMETERS (config.txt)
+4. COMMAND REFERENCE (post-initialize)
+---------------------------------------------------------------------------
+Process creation:
+  screen -s <name> <mem_size>
+      Creates a process with the given memory allocation and attaches to
+      its screen. mem_size must be a power of 2 in [64, 65536] bytes;
+      otherwise the console prints "invalid memory allocation: <size> ..."
+      and does NOT create the process. Example: screen -s process1 256
+
+  screen -c <name> <mem_size> "<instructions>"
+      Creates a process with 1-50 semicolon-separated user-defined
+      instructions and attaches to its screen. Throws "invalid command" if
+      the instruction count is out of range. Supported instruction
+      keywords: DECLARE, ADD, SUBTRACT, PRINT, READ, WRITE, SLEEP, FOR.
+      Example:
+      screen -c process2 4096 "DECLARE varA 10; DECLARE varB 5; ADD varA varA varB; WRITE 0x500 varA; READ varC 0x500; PRINT(\"Result: \" + varC)"
+
+  screen -r <name>
+      Re-attaches to a running process's screen. If the process name isn't
+      found or has finished, prints "Process <name> not found." If the
+      process shut down due to a memory access violation, prints
+      "Process <name> shut down due to memory access violation error that
+      occurred at <HH:MM:SS>. <hex address> invalid." instead of
+      re-attaching.
+
+  screen -ls
+      Lists running and finished processes, each core's assignment/progress,
+      and overall CPU utilization.
+
+Scheduler control:
+  scheduler-start / scheduler-stop
+      Start/stop automatic batch process generation, spawning one process
+      every batch-process-freq CPU ticks per config.txt.
+
+  spawn-batch
+      Manually spawns a single batch process on demand (useful for testing
+      without waiting on the batch-process-freq cadence).
+
+Reporting & memory visualization:
+  report-util
+      Writes a utilization report (CPU + memory snapshot) to
+      csopesy-log.txt in the working directory.
+
+  process-smi
+      nvidia-smi-style summary: CPU utilization, memory usage/utilization,
+      and per-process memory footprint for all running processes.
+
+  vmstat
+      Detailed memory/CPU stats: total/used/free memory, idle/active/total
+      CPU ticks, and cumulative pages paged in/out.
+
+  csopesy-backing-store.txt
+      Written to the working directory at startup and kept live-updated as
+      pages are evicted to / loaded from the backing store by the demand
+      paging allocator. Open it any time to inspect current backing-store
+      contents.
+
+  exit
+      Detaches from an attached process screen, or quits the application
+      from the main menu.
+
+---------------------------------------------------------------------------
+5. CONFIG.TXT PARAMETERS (config.txt)
 ---------------------------------------------------------------------------
 From MO1:
   num-cpu           : number of CPUs, range [1, 128]
