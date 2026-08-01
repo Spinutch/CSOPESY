@@ -491,6 +491,17 @@ struct SchedulerImpl
                         }
                         goto next_dispatch;
                     }
+                    else if (res.type == StepResult::CRASHED) {
+                        // interpreter already set cp.proc.state = FINISHED and crash info
+                        cp.proc.coreId = -1;
+                        coreSlots[coreId] = "";
+                        workerReady[coreId].store(true);
+                        // MO2: Release memory frames for the crashed process.
+                        if (memoryManager) {
+                            memoryManager->deallocateProcess(pname);
+                        }
+                        goto next_dispatch;
+                    }
 
                     ticksOnCore = cp.ticksOnCore;
                 }
