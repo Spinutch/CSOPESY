@@ -345,10 +345,11 @@ void runConsole(SchedT &sched, Config &cfg, BackingStore &backingStore)
             continue;
         }
 
-        // ---- scheduler-start ----
-        if (line == "scheduler-start")
+        // ---- scheduler-start (also accepted as "scheduler-test", the name
+        // used in the original CSOPESY spec for this same command) ----
+        if (line == "scheduler-start" || line == "scheduler-test")
         {
-            std::cout << "[console] >> Routing: 'scheduler-start' → sched.schedulerStart()\n";
+            std::cout << "[console] >> Routing: '" << line << "' → sched.schedulerStart()\n";
             sched.schedulerStart();
             std::cout << "[console] Batch process generation started.\n";
             continue;
@@ -468,7 +469,7 @@ void runConsole(SchedT &sched, Config &cfg, BackingStore &backingStore)
         std::cout << "  Valid commands: initialize, exit, screen -ls, "
                      "screen -s <name> <mem_size>, screen -r <name>,\n"
                      "                 screen -c <name> <mem_size> \"<instructions>\",\n"
-                     "                 scheduler-start, scheduler-stop, report-util, process-smi, vmstat\n";
+                     "                 scheduler-start (aka scheduler-test), scheduler-stop, report-util, process-smi, vmstat\n";
     }
 
     // CRITICAL: stop and join every scheduler/worker/batch thread *before*
