@@ -112,10 +112,6 @@ struct SchedulerImpl
     std::unique_ptr<std::mutex[]> workerMu;
     std::unique_ptr<std::condition_variable[]> workerCv;
 
-    // --- Recent utilization window for smoothing ---
-    std::deque<int> recentUsedCores; // sliding window of used core counts
-    size_t smoothingWindow = 50;     // default window size (ticks)
-
     // --- MO2: cumulative CPU-tick accounting for vmstat (Heather) ---
     std::atomic<uint64_t> activeTicksAccum{0};
     std::atomic<uint64_t> idleTicksAccum{0};
@@ -423,16 +419,12 @@ struct SchedulerImpl
                 }
             }
 
-            // Record current used cores into recent window (for smoothing)
-            // and accumulate cumulative active/idle CPU ticks (for vmstat).
+            // Accumulate cumulative active/idle CPU ticks (for vmstat).
             {
                 int curUsed = 0;
                 for (int i = 0; i < numCPU; ++i) {
                     if (!workerReady[i].load()) ++curUsed;
                 }
-                recentUsedCores.push_back(curUsed);
-                if (recentUsedCores.size() > smoothingWindow) recentUsedCores.pop_front();
-
                 activeTicksAccum.fetch_add(static_cast<uint64_t>(curUsed));
                 idleTicksAccum.fetch_add(static_cast<uint64_t>(numCPU - curUsed));
             }
@@ -758,28 +750,11 @@ SchedulerSnapshot Scheduler::getSnapshot()
         }
     }
 
-    // Option A: Recompute usedCores by inspecting workerReady flags (false => core busy)
-    // Option B: Count assigned core IDs
-    std::set<int> assignedCores;
-    for (auto &entry : I.processMap) {
-        if (entry.second.proc.coreId >= 0)
-            assignedCores.insert(entry.second.proc.coreId);
-    }
-    // If smoothing window has data, use averaged used core count
-    if (!I.recentUsedCores.empty()) {
-        long sum = 0;
-        for (int v : I.recentUsedCores) sum += v;
-        double avg = static_cast<double>(sum) / static_cast<double>(I.recentUsedCores.size());
-        snap.usedCores = static_cast<int>(std::round(avg));
-    }
-    else if (!assignedCores.empty()) {
-        snap.usedCores = static_cast<int>(assignedCores.size());
-    } else {
-        // Fallback to workerReady flags
-        snap.usedCores = 0;
-        for (int i = 0; i < I.numCPU; ++i) {
-            if (!I.workerReady[i].load()) ++snap.usedCores;
-        }
+    // Instantaneous core-busy count: workerReady[i] == false means core i is
+    // currently executing an instruction right now, this tick.
+    snap.usedCores = 0;
+    for (int i = 0; i < I.numCPU; ++i) {
+        if (!I.workerReady[i].load()) ++snap.usedCores;
     }
     return snap;
 }
