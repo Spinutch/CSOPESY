@@ -299,29 +299,43 @@ void runConsole(SchedT &sched, Config &cfg, BackingStore &backingStore)
 
             std::istringstream hiss(header);
             std::string name, sizeToken;
-            hiss >> name >> sizeToken;
-            if (name.empty() || sizeToken.empty())
+            hiss >> name;
+            bool hasSizeToken = static_cast<bool>(hiss >> sizeToken);
+            if (name.empty())
             {
-                std::cout << "[console] Usage: screen -c <process_name> <process_memory_size> "
+                std::cout << "[console] Usage: screen -c <process_name> [process_memory_size] "
                              "\"<instructions>\"\n";
                 continue;
             }
 
-            uint64_t memSize = 0;
-            try
+            uint64_t memSize;
+            if (hasSizeToken)
             {
-                memSize = std::stoull(sizeToken);
-            }
-            catch (const std::exception &)
-            {
-                std::cout << "[console] " << MemoryUtils::invalidMemoryMessage(0) << "\n";
-                continue;
-            }
+                try
+                {
+                    memSize = std::stoull(sizeToken);
+                }
+                catch (const std::exception &)
+                {
+                    std::cout << "[console] " << MemoryUtils::invalidMemoryMessage(0) << "\n";
+                    continue;
+                }
 
-            if (!MemoryUtils::isValidMemorySize(memSize))
+                if (!MemoryUtils::isValidMemorySize(memSize))
+                {
+                    std::cout << "[console] " << MemoryUtils::invalidMemoryMessage(memSize) << "\n";
+                    continue;
+                }
+            }
+            else
             {
-                std::cout << "[console] " << MemoryUtils::invalidMemoryMessage(memSize) << "\n";
-                continue;
+                // MO2: process_memory_size is optional -- the spec's own
+                // "screen -c" sample usage omits it. Default to the largest
+                // allowed size so any READ/WRITE address the instructions
+                // reference stays valid regardless of config.txt; demand
+                // paging keeps this cheap even under a tiny max-overall-mem,
+                // since only pages actually touched get loaded.
+                memSize = MemoryUtils::kMaxProcMem;
             }
 
             if (sched.findProcess(name))
