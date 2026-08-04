@@ -52,6 +52,15 @@ struct CoreProcess
     uint64_t sleepUntilTick = 0; // for SLEEP instruction (M3 sets this)
     bool sleeping = false;
 
+    // MO2: Whether this process is subject to memory admission control
+    // (numPages > totalFrames blocks dispatch entirely). True for
+    // scheduler/screen-s auto-generated processes -- a continuous flood of
+    // identical oversized processes can genuinely never all coexist. False
+    // for screen -c user-defined processes: a single hand-crafted process
+    // only ever touches 1-2 actual pages per instruction, so true per-page
+    // demand paging handles it fine regardless of its declared size.
+    bool admissionControlled = true;
+
     // Converts to the public Process view (for M1 / M3 calls)
     Process toProcess() const
     {
@@ -318,6 +327,7 @@ struct SchedulerImpl
         cp.ticksOnCore = 0;
         cp.sleepUntilTick = 0;
         cp.sleeping = false;
+        cp.admissionControlled = false; // user-defined: exempt, see field comment
 
         cp.proc.instructions = userInstructions;
         cp.proc.invalidateFlatten();
@@ -378,6 +388,24 @@ struct SchedulerImpl
                         continue;
                     if (cp.sleeping)
                         continue;
+
+                    // MO2: Admission control -- an auto-generated process
+                    // (scheduler/screen-s) whose full page-table requirement
+                    // exceeds the system's total frame count can never
+                    // coexist with the continuous flood of siblings just
+                    // like it. Keep it queued but don't burn a core
+                    // dispatching it; requeue at the tail so it doesn't
+                    // permanently block processes behind it that DO fit.
+                    // Exempt screen -c processes (admissionControlled=false)
+                    // -- a single hand-crafted process only ever touches 1-2
+                    // actual pages per instruction, so true per-page demand
+                    // paging handles it fine regardless of declared size.
+                    if (memoryManager && cp.admissionControlled &&
+                        cp.proc.numPages > memoryManager->getTotalFrameCount())
+                    {
+                        readyQueue.push_back(pname);
+                        continue;
+                    }
 
                     // MO2: No eager swap-in here -- pages are brought in lazily
                     // by handlePageFault() as the worker actually executes
