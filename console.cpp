@@ -11,6 +11,7 @@
 #include "MemoryStats.h"
 #include "BackingStore.h"
 #include "InstructionParser.h"
+#include "Logger.h"
 #include <iostream>
 #include <iomanip>
 #include <fstream>
@@ -66,7 +67,7 @@ static void printBanner()
 // Attached-process loop  (screen -s / screen -r)
 // ---------------------------------------------------------------------------
 template <typename SchedT>
-static void attachedProcessLoop(SchedT &sched, const std::string &procName)
+static void attachedProcessLoop(SchedT &sched, const std::string &procName, SessionLogger &logger)
 {
     Process *proc = sched.findProcess(procName);
 
@@ -92,6 +93,7 @@ static void attachedProcessLoop(SchedT &sched, const std::string &procName)
             std::cout << "[DEBUG] stdin closed; returning to menu.\n";
             break;
         }
+        logger.logInput(cmd);
         cmd = trim(cmd);
 
         if (cmd == "exit")
@@ -128,7 +130,7 @@ static void attachedProcessLoop(SchedT &sched, const std::string &procName)
 // runConsole  –  main REPL
 // ---------------------------------------------------------------------------
 template <typename SchedT>
-void runConsole(SchedT &sched, Config &cfg, BackingStore &backingStore)
+void runConsole(SchedT &sched, Config &cfg, BackingStore &backingStore, SessionLogger &logger)
 {
     printBanner();
 
@@ -144,6 +146,7 @@ void runConsole(SchedT &sched, Config &cfg, BackingStore &backingStore)
             std::cout << "\n[console] stdin EOF — exiting.\n";
             break;
         }
+        logger.logInput(line);
         line = trim(line);
 
         // ---- Always-available commands (even before initialize) ----
@@ -240,7 +243,7 @@ void runConsole(SchedT &sched, Config &cfg, BackingStore &backingStore)
             std::cout << "[console] >> Routing: 'screen -s' → create process '"
                       << name << "' (" << memSize << " bytes) then attach\n";
             sched.createNamedProcess(name, cfg, memSize);
-            attachedProcessLoop(sched, name);
+            attachedProcessLoop(sched, name, logger);
             continue;
         }
 
@@ -273,7 +276,7 @@ void runConsole(SchedT &sched, Config &cfg, BackingStore &backingStore)
                           << p->violationTimestamp << ". " << hexAddr.str() << " invalid.\n";
                 continue;
             }
-            attachedProcessLoop(sched, name);
+            attachedProcessLoop(sched, name, logger);
             continue;
         }
 
@@ -355,7 +358,7 @@ void runConsole(SchedT &sched, Config &cfg, BackingStore &backingStore)
                       << name << "' (" << memSize << " bytes, " << parsed.instructions.size()
                       << " instruction(s)) then attach\n";
             sched.createUserDefinedProcess(name, memSize, parsed.instructions);
-            attachedProcessLoop(sched, name);
+            attachedProcessLoop(sched, name, logger);
             continue;
         }
 
@@ -511,4 +514,4 @@ void runConsole(SchedT &sched, Config &cfg, BackingStore &backingStore)
 // possible for this file anymore — see main_1.cpp for the integration test
 // this now requires instead.
 #include "scheduler.h"
-template void runConsole<Scheduler>(Scheduler &, Config &, BackingStore &);
+template void runConsole<Scheduler>(Scheduler &, Config &, BackingStore &, SessionLogger &);

@@ -588,10 +588,10 @@ struct SchedulerImpl
                             coreSlots[coreId] = "";
                             readyQueue.push_back(pname); // requeue at tail
 
-                            // MO2: Evict the preempted process's pages to backing store.
-                            if (memoryManager) {
-                                memoryManager->contextSwitch(pname, "");
-                            }
+                            // Pages stay resident while the process waits in the
+                            // ready queue; handlePageFault() (per instruction) is
+                            // the only place frames get reclaimed, and only when
+                            // another process actually needs one and none are free.
 
                             // std::cout << "[Core " << coreId << "] RR quantum expired for '"
                             //           << pname << "' at tick " << g_cpuTick.load()

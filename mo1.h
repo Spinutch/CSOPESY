@@ -18,6 +18,7 @@
 // self-contained even before M2/M3 hand over their real headers.
 // ---------------------------------------------------------------------------
 class BackingStore;
+class SessionLogger;
 
 // ---- Minimal Scheduler contract (owned by M2) ------------------------------
 // M1 only needs the snapshot API. M2 will provide the real implementation.
@@ -76,4 +77,4 @@ void renderProcessSmi(const Process& p, std::ostream& out = std::cout);
 //   void schedulerStop()
 //   Process* findProcess(const std::string& name)   // nullptr = not found
 template<typename SchedT>
-void runConsole(SchedT& sched, Config& cfg, BackingStore& backingStore);
+void runConsole(SchedT& sched, Config& cfg, BackingStore& backingStore, SessionLogger& logger);
